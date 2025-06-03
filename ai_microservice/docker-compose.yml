@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  ai-service:
+    build: .
+    container_name: ai_microservice
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=True
+      - APP_NAME=AI Microservice
+      - CORS_ORIGINS=*
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - ai-network
+
+  # Uncomment to add a Redis cache
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: redis_cache
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - ai-network
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 3
+
+networks:
+  ai-network:
+    driver: bridge
+
+# volumes:
+#   redis_data:

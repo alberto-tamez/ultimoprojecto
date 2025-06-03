@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+  # NGINX Load Balancer
+  load-balancer:
+    build: ./nginx
+    container_name: load-balancer
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+      - ./frontend/.next/static:/usr/share/nginx/html/_next/static:ro
+      - ./frontend/public:/usr/share/nginx/html:ro
+    depends_on:
+      - backend1
+      - backend2
+      - backend3
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # Backend Service 1
+  backend1:
+    build: 
+      context: ../back
+      dockerfile: Dockerfile
+    container_name: backend1
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/fastapi_auth
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # Backend Service 2
+  backend2:
+    build: 
+      context: ../back
+      dockerfile: Dockerfile
+    container_name: backend2
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/fastapi_auth
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # Backend Service 3
+  backend3:
+    build: 
+      context: ../back
+      dockerfile: Dockerfile
+    container_name: backend3
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/fastapi_auth
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=fastapi_auth
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    expose:
+      - "6379"
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # Monitoring (optional)
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #   restart: unless-stopped
+  #   networks:
+  #     - app-network
+
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: grafana
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - prometheus
+  #   networks:
+  #     - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  # grafana_data:
