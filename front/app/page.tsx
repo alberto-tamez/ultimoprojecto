@@ -1,85 +1,68 @@
-"use client"
+'use client';
 
-import { useState, useEffect } from "react"
-import { LoginForm } from "@/components/login-form"
-import { Dashboard } from "@/components/dashboard"
-import { ProfilePage } from "@/components/profile-page"
-import { Navigation } from "@/components/navigation"
+import { useRouter } from 'next/navigation';
+import { signOut } from '@workos-inc/authkit-nextjs';
+import { useAuth } from '@workos-inc/authkit-nextjs/components';
+import { Dashboard } from '@/components/dashboard';
 
-export default function Home() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [currentPage, setCurrentPage] = useState<"dashboard" | "profile">("dashboard")
-  const [user, setUser] = useState<{
-    email: string
-    name: string
-    role: "student" | "teacher" | "other"
-  } | null>(null)
+export default function DashboardPage() {
+  const router = useRouter();
+  const { user, loading } = useAuth({ ensureSignedIn: true });
 
-  useEffect(() => {
-    // Check if user is already logged in
-    const savedUser = localStorage.getItem("user")
-    if (savedUser) {
-      setUser(JSON.parse(savedUser))
-      setIsAuthenticated(true)
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      // After sign out, WorkOS AuthKit will redirect to the configured sign-in page
+    } catch (err) {
+      console.error('Error during sign out:', err);
     }
-  }, [])
+  };
 
-  const handleLogin = (email: string, password: string) => {
-    // Simple authentication - in real app, this would be server-side
-    const userData = {
-      email,
-      name: "",
-      role: "student" as const,
-    }
-    setUser(userData)
-    setIsAuthenticated(true)
-    localStorage.setItem("user", JSON.stringify(userData))
-  }
-
-  const handleLogout = () => {
-    setIsAuthenticated(false)
-    setUser(null)
-    localStorage.removeItem("user")
-    setCurrentPage("dashboard")
-  }
-
-  const updateUser = (updatedUser: typeof user) => {
-    setUser(updatedUser)
-    if (updatedUser) {
-      localStorage.setItem("user", JSON.stringify(updatedUser))
-    }
-  }
-
-  if (!isAuthenticated) {
+  if (loading) {
     return (
-      <div style={{ padding: '40px' }}>
-        <h1 style={{ fontSize: '24px', marginBottom: '20px' }}>Login</h1>
-        <form method="GET" action="/api/auth/login">
-          <button
-            type="submit"
-            style={{
-              backgroundColor: '#4285F4',
-              color: 'white',
-              padding: '10px 20px',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            Iniciar sesión con WorkOS
-          </button>
-        </form>
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <p className="text-lg text-gray-700">Loading...</p>
       </div>
-    )
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <p className="text-lg text-gray-700">Redirecting to login...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation currentPage={currentPage} onPageChange={setCurrentPage} onLogout={handleLogout} user={user} />
-
-      <main className="container mx-auto px-4 py-8">
-        {currentPage === "dashboard" ? <Dashboard /> : <ProfilePage user={user} onUpdateUser={updateUser} />}
+    <div className="min-h-screen bg-gray-100">
+      <div className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">
+                {user.email}
+              </span>
+              <button
+                onClick={handleSignOut}
+                className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div className="px-4 py-6 sm:px-0">
+          <div className="rounded-lg">
+            <Dashboard />
+          </div>
+        </div>
       </main>
     </div>
-  )
+  );
 }
+

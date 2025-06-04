@@ -1,30 +1,18 @@
-import { GetServerSideProps } from 'next';
-import { getTokenCookie } from '../lib/session';
+'use client';
 
-export const getServerSideProps: GetServerSideProps = async ({ req }) => {
-  const token = getTokenCookie(req);
+import { useAuth } from '@workos-inc/authkit-nextjs/components';
+import { Dashboard } from '@/components/dashboard';
 
-  if (!token) {
-    return {
-      redirect: {
-        destination: '/',
-        permanent: false,
-      },
-    };
+export default function DashboardPage() {
+  const { user } = useAuth();
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-foreground">Loading...</div>
+      </div>
+    );
   }
 
-  return {
-    props: {
-      email: token,
-    },
-  };
-};
-
-export default function Dashboard({ email }: { email: string }) {
-  return (
-    <div>
-      <h1>Bienvenido</h1>
-      <p>Estás logueado como: {email}</p>
-    </div>
-  );
+  return <Dashboard />;
 }
