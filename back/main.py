@@ -5,7 +5,7 @@ from datetime import timedelta
 import models, schemas, crud, auth
 from database import engine, get_db
 from config import get_settings
-from routes import login, users, logs, predict, history
+from routes import login, users, logs, history
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
