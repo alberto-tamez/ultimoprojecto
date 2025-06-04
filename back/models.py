@@ -4,7 +4,7 @@ from sqlalchemy.sql import func
 from datetime import datetime
 import enum
 
-from .database import Base  # Use the Base from the database module
+from database import Base  # Use the Base from the database module
 
 class RoleEnum(enum.Enum): # Define the roles for users
     admin = "admin"

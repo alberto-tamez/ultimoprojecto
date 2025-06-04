@@ -2,10 +2,10 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from datetime import timedelta
-from . import models, schemas, crud, auth
-from .database import engine, get_db
-from .config import get_settings
-from .routes import login, users, logs, predict, history
+import models, schemas, crud, auth
+from database import engine, get_db
+from config import get_settings
+from routes import login, users, logs, predict, history
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)

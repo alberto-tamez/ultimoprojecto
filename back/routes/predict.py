@@ -5,9 +5,9 @@ import pandas as pd
 import json
 from datetime import datetime
 
-from .. import models, schemas, crud
-from ..database import get_db
-from ..auth import get_current_user
+import models, schemas, crud
+from database import get_db
+from auth import get_current_user
 from fastapi.security import OAuth2PasswordBearer
 
 router = APIRouter(
