@@ -1,16 +1,15 @@
-# AI Microservice
+# CSV Analysis Microservice
 
-A FastAPI-based microservice for neural network operations, designed to run in the private cloud infrastructure of Tec de Monterrey. This service includes basic authentication and validation functionality.
+A FastAPI-based microservice that analyzes CSV files using a neural network. The service provides a single endpoint that accepts a CSV file and returns predictions from a trained model.
 
 ## Features
 
-- 🚀 FastAPI for high-performance API endpoints
+- 🚀 Single endpoint for CSV file analysis
+- 🧠 Simple neural network model for predictions
 - 🐳 Docker and Docker Compose support
-- 🔒 JWT Authentication
 - ✅ Health check endpoint
-- 📊 Structured logging
 - 🔄 CORS support
-- 🧪 Test-ready structure
+- 📊 Built with FastAPI for high performance
 
 ## Prerequisites
 
@@ -22,30 +21,25 @@ A FastAPI-based microservice for neural network operations, designed to run in t
 
 ### Local Development
 
-1. **Clone the repository** (if not already done)
-   ```bash
-   git clone <repository-url>
-   cd ai_microservice
-   ```
-
-2. **Create and activate a virtual environment**
+1. **Create and activate a virtual environment**
    ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-3. **Install dependencies**
+2. **Install dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Run the development server**
+3. **Run the development server**
    ```bash
    uvicorn main:app --reload
    ```
 
-5. **Access the API**
-   - API documentation: http://localhost:8000/docs
+4. **Access the API**
+   - Interactive API documentation: http://localhost:8000/docs
+   - Alternative documentation: http://localhost:8000/redoc
    - Health check: http://localhost:8000/health
 
 ### Using Docker
@@ -55,54 +49,70 @@ A FastAPI-based microservice for neural network operations, designed to run in t
    docker-compose up --build
    ```
 
+   Or directly with Docker:
+   ```bash
+   docker build -t csv-analyzer .
+   docker run -p 8000:8000 csv-analyzer
+   ```
+
 2. **Access the API**
-   - API documentation: http://localhost:8000/docs
+   - Interactive API documentation: http://localhost:8000/docs
+   - Alternative documentation: http://localhost:8000/redoc
    - Health check: http://localhost:8000/health
 
 ## API Endpoints
 
-- `GET /`: Service information
-- `GET /health`: Health check
-- `POST /process`: Process input with neural network
-- `POST /token`: Get authentication token
+### Analyze CSV
 
-### Authentication
+- **URL**: `POST /analyze-csv`
+- **Content-Type**: `multipart/form-data`
+- **Request Body**: 
+  - `file`: The CSV file to analyze (required)
+  - The last column should be the target variable
+  - All other columns will be treated as features
 
-1. First, get an access token:
-   ```bash
-   curl -X POST "http://localhost:8000/token" \
-     -H "Content-Type: application/json" \
-     -d '{"username": "user", "password": "password"}'
-   ```
-
-2. Use the token in subsequent requests:
-   ```bash
-   curl -X POST "http://localhost:8000/process" \
-     -H "Authorization: Bearer YOUR_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"text": "Sample input"}'
-   ```
-
-### Example Request
+#### Example Request
 
 ```bash
-curl -X POST "http://localhost:8000/process" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -d '{"text": "Hello, world!"}'
+curl -X 'POST' \
+  'http://localhost:8000/analyze-csv' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'file=@sample_data.csv;type=text/csv'
 ```
 
-### Example Response
+#### Example Response
 
 ```json
 {
-  "result": "Processed: HELLO, WORLD!",
+  "predictions": [0.12, 0.89, 0.23, 0.91, 0.15, 0.87, 0.21, 0.94, 0.18, 0.89],
   "metadata": {
-    "model": "example_model",
-    "parameters": {}
+    "samples_processed": 10,
+    "features_used": 3,
+    "model_type": "MLPClassifier"
   }
 }
 ```
+
+### Health Check
+
+- **URL**: `GET /health`
+- **Response**: `{"status": "healthy"}`
+
+## Sample Data
+
+A sample CSV file (`sample_data.csv`) is provided for testing. The format should be:
+
+```csv
+feature1,feature2,feature3,target
+1.2,3.4,5.6,0
+2.1,4.3,1.2,1
+...
+```
+
+- The last column should be the target variable (0 or 1 for binary classification)
+- All other columns will be treated as features
+- The first row should contain headers
 
 ## Configuration
 
@@ -115,14 +125,8 @@ PORT=8000
 DEBUG=True
 
 # Application Settings
-APP_NAME="AI Microservice"
-APP_VERSION="0.1.0"
-APP_DESCRIPTION="FastAPI microservice for neural network operations"
-
-# Authentication
-SECRET_KEY=your-secret-key-here
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
+APP_NAME="CSV Analysis Service"
+APP_VERSION="1.0.0"
 
 # CORS (comma-separated list of origins, or * for all)
 CORS_ORIGINS="*"
@@ -139,13 +143,14 @@ ai_microservice/
 ├── config.py              # Configuration settings
 ├── requirements.txt       # Python dependencies
 ├── Dockerfile             # Container definition
-└── docker-compose.yml     # Docker Compose configuration
+├── docker-compose.yml     # Docker Compose configuration
+└── sample_data.csv        # Sample CSV data for testing
 ```
 
 ### Running Tests
 
 ```bash
-pytest
+uv run pytest
 ```
 
 ## Deployment
@@ -153,7 +158,7 @@ pytest
 ### Building the Docker Image
 
 ```bash
-docker build -t ai-microservice .
+docker build -t csv-analyzer .
 ```
 
 ### Running in Production
@@ -164,9 +169,11 @@ For production, set `DEBUG=False` in the `.env` file and use a production WSGI s
 gunicorn -k uvicorn.workers.UvicornWorker -w 4 -b :8000 main:app
 ```
 
-## Private Cloud Integration
+### Using Docker Compose
 
-This service is designed to be deployed in the Tec de Monterrey private cloud environment. The Docker Compose configuration includes placeholders for network settings that should be configured according to the cloud provider's specifications.
+```bash
+docker-compose up --build
+```
 
 ## License
 
