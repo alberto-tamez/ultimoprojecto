@@ -43,3 +43,20 @@ class Log(LogBase):
 
     class Config:
         from_attributes = True
+
+class PredictionResponse(BaseModel):
+    recommended_crop: str
+    confidence: float
+
+class PredictionLog(BaseModel):
+    """
+    Schema for prediction history entries.
+    """
+    id: int  # Unique identifier for the log entry
+    user_id: int  # ID of the user who made the prediction
+    timestamp: datetime  # When the prediction was made
+    result: str  # Result of the prediction
+    filename: str  # Name of the file that was submitted
+
+    class Config:
+        from_attributes = True
