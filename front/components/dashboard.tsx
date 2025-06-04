@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Upload, FileText, Brain, Download } from "lucide-react"
+import { Upload, FileText, Brain, Download, LogOut } from "lucide-react"
+import { SignOutButton } from "./auth/sign-out-button"
 
 export function Dashboard() {
   const [file, setFile] = useState<File | null>(null)
@@ -94,11 +95,16 @@ This analysis suggests your data is suitable for predictive modeling with some p
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Upload className="h-5 w-5" />
-            <span>Data Upload</span>
+          <CardTitle className="flex flex-row justify-between items-start">
+            <div>
+              <CardTitle>Data Analysis Dashboard</CardTitle>
+              <CardDescription>Upload your CSV file or use the default dataset to analyze</CardDescription>
+            </div>
+            <SignOutButton variant="outline" className="flex items-center gap-2">
+              <LogOut className="h-4 w-4" />
+              <span>Sign Out</span>
+            </SignOutButton>
           </CardTitle>
-          <CardDescription>Choose a CSV file to analyze or use our sample dataset</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
