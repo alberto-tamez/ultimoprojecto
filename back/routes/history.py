@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from .. import models
 from ..schemas import PredictionLog
 from ..database import get_db
-from ..auth import get_current_active_user
+from ..auth import get_current_user
 
 router = APIRouter(
     prefix="/history",
@@ -18,7 +18,7 @@ router = APIRouter(
 )
 def get_prediction_history(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user)
+    current_user: models.User = Depends(get_current_user)
 ):
     return (
         db.query(models.PredictionLog)
