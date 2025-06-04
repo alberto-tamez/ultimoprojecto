@@ -38,3 +38,12 @@ class Log(Base): # Define the Log model
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="logs")
+
+class PredictionLog(Base):
+    __tablename__ = "prediction_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    result = Column(String, nullable=False)
+    file_name = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
