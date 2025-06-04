@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import timedelta
-from .. import schemas, auth
-from ..database import get_db
-from ..config import get_settings
+import schemas, auth
+from database import get_db
+from config import get_settings
 
 router = APIRouter()
 settings = get_settings()

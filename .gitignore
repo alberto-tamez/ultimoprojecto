@@ -1,2 +1,5 @@
 ai_microservice/venv
 ai_microservice/__pycache__
+back/venv
+back/__pycache__
+back/routes/__pycache__
