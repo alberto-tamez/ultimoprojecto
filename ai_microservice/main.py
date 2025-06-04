@@ -20,8 +20,8 @@ settings = get_settings()
 
 # Create FastAPI app
 app = FastAPI(
-    title="CSV Analysis Service",
-    version="1.0.0",
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
     description="A microservice for analyzing CSV files with a neural network",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -30,7 +30,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
