@@ -51,7 +51,26 @@ export default function Home() {
   }
 
   if (!isAuthenticated) {
-    return <LoginForm onLogin={handleLogin} />
+    return (
+      <div style={{ padding: '40px' }}>
+        <h1 style={{ fontSize: '24px', marginBottom: '20px' }}>Login</h1>
+        <form method="GET" action="/api/auth/login">
+          <button
+            type="submit"
+            style={{
+              backgroundColor: '#4285F4',
+              color: 'white',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            Iniciar sesión con WorkOS
+          </button>
+        </form>
+      </div>
+    )
   }
 
   return (
