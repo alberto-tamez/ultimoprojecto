@@ -5,7 +5,7 @@ from datetime import timedelta
 from . import models, schemas, crud, auth
 from .database import engine, get_db
 from .config import get_settings
-from .routes import login, users, logs
+from .routes import login, users, logs, predict, history
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
@@ -25,6 +25,9 @@ app.add_middleware(
 app.include_router(users.router)
 app.include_router(login.router)
 app.include_router(logs.router)
+
+app.include_router(predict.router, prefix="/predict")
+app.include_router(history.router)
 
 # Root endpoint
 @app.get("/")
