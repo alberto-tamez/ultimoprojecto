@@ -10,14 +10,16 @@ class LogTypeEnum(enum.Enum): # Define the types of logs
     crop = "crop"
     mnist = "mnist"
 
-class User(Base): # Define the User model
+class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    full_name = Column(Text, nullable=True)
-    email = Column(Text, unique=True, nullable=False, index=True)
+    workos_user_id = Column(String(255), unique=True, nullable=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    full_name = Column(String(255), nullable=True)
+    is_admin = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    google_id = Column(String, nullable=True)  # Nuevo campo opcional
 
     logs = relationship("Log", back_populates="user")
 

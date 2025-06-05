@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
@@ -13,9 +13,7 @@ class TokenData(BaseModel):
 # --- User Schemas ---
 class UserBase(BaseModel):
     email: EmailStr
-    name: str
-    role: str
-    google_id: Optional[str] = None
+    full_name: Optional[str]
 
 class UserCreate(BaseModel):
     email: EmailStr
