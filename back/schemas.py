@@ -60,3 +60,19 @@ class PredictionLog(BaseModel):
 
     class Config:
         from_attributes = True
+
+from pydantic import BaseModel
+from datetime import datetime
+from typing import Optional
+
+class UserResponse(BaseModel):
+    id: int
+    workos_user_id: Optional[str]
+    email: str
+    full_name: Optional[str]
+    is_admin: bool
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
