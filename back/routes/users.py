@@ -5,7 +5,7 @@ from database import get_db
 
 router = APIRouter()
 
-@router.post("/users/", response_model=schemas.UserResponse)
+@router.post("/users/", response_model=schemas.UserResponse, status_code=201)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = crud.get_user_by_email(db, email=user.email)
     if db_user:
