@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
 
@@ -62,10 +62,6 @@ class PredictionLog(BaseModel):
 
     class Config:
         from_attributes = True
-
-from pydantic import BaseModel
-from datetime import datetime
-from typing import Optional
 
 class UserResponse(BaseModel):
     id: int
