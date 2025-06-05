@@ -6,10 +6,6 @@ import enum
 
 from database import Base  # Use the Base from the database module
 
-class RoleEnum(enum.Enum): # Define the roles for users
-    admin = "admin"
-    user = "user"
-
 class LogTypeEnum(enum.Enum): # Define the types of logs
     crop = "crop"
     mnist = "mnist"
@@ -20,7 +16,6 @@ class User(Base): # Define the User model
     id = Column(Integer, primary_key=True, index=True)
     full_name = Column(Text, nullable=True)
     email = Column(Text, unique=True, nullable=False, index=True)
-    role = Column(Enum(RoleEnum), nullable=False, default=RoleEnum.user)
     created_at = Column(DateTime, default=datetime.utcnow)
     google_id = Column(String, nullable=True)  # Nuevo campo opcional
 
