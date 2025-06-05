@@ -21,25 +21,37 @@ export function SignOutButton({
     e.preventDefault();
     setIsLoading(true);
 
+    const appUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL;
+    const finalSignedOutUrl = appUrlFromEnv 
+      ? `${appUrlFromEnv}/signed-out` 
+      : '/signed-out';
+
+    if (!appUrlFromEnv) {
+        console.warn(
+        'NEXT_PUBLIC_APP_URL is not set. Sign-out redirect will be relative, which might be incorrect on deployed environments.'
+        );
+    }
+
     try {
-      // Call the logout API route
-      const response = await fetch('/api/auth/logout', { 
+      // Call the logout API route.
+      // The `fetch` with `redirect: 'follow'` should mean the browser
+      // follows all redirects issued by the server (including from WorkOS).
+      await fetch('/api/auth/logout', { 
         method: 'GET',
         redirect: 'follow'
       });
       
-      // If we get here, the fetch didn't follow the redirect (shouldn't happen with redirect: 'follow')
-      // So we'll handle it manually
-      if (response.redirected) {
-        window.location.href = response.url;
-      } else {
-        // Fallback to signed-out page
-        window.location.href = '/signed-out';
+      // After the fetch, the browser should have been redirected to the
+      // final URL (e.g., `${appUrlFromEnv}/signed-out`).
+      // We explicitly navigate to the correctly constructed `finalSignedOutUrl`
+      // if not already there, to ensure the correct domain.
+      if (window.location.href !== finalSignedOutUrl) {
+        window.location.href = finalSignedOutUrl;
       }
     } catch (error) {
       console.error('Error during sign out:', error);
-      // Still redirect to signed-out page even if there's an error
-      window.location.href = '/signed-out';
+      // On error, also redirect to the final signed-out URL.
+      window.location.href = finalSignedOutUrl;
     } finally {
       setIsLoading(false);
     }
