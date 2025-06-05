@@ -17,9 +17,13 @@ class UserBase(BaseModel):
     role: str
     google_id: Optional[str] = None
 
-class UserCreate(UserBase):
-    password: Optional[str] = None  # Puede ser None para Google Auth
-
+class UserCreate(BaseModel):
+    email: EmailStr
+    full_name: Optional[str] = None
+    workos_user_id: Optional[str] = None
+    is_admin: Optional[bool] = False
+    is_active: Optional[bool] = True
+    
 class UserInDB(UserBase):
     id: int
     created_at: datetime
