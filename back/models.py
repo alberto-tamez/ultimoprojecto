@@ -18,7 +18,7 @@ class User(Base): # Define the User model
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(Text, nullable=False)
+    full_name = Column(Text, nullable=True)
     email = Column(Text, unique=True, nullable=False, index=True)
     hashed_password = Column(Text, nullable=True)  # Ahora puede ser nulo para Google
     role = Column(Enum(RoleEnum), nullable=False, default=RoleEnum.user)
