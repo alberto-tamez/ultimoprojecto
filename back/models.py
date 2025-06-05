@@ -20,7 +20,6 @@ class User(Base): # Define the User model
     id = Column(Integer, primary_key=True, index=True)
     full_name = Column(Text, nullable=True)
     email = Column(Text, unique=True, nullable=False, index=True)
-    hashed_password = Column(Text, nullable=True)  # Ahora puede ser nulo para Google
     role = Column(Enum(RoleEnum), nullable=False, default=RoleEnum.user)
     created_at = Column(DateTime, default=datetime.utcnow)
     google_id = Column(String, nullable=True)  # Nuevo campo opcional
