@@ -2,8 +2,9 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 import os
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 DB_HOST: str = os.getenv("DB_HOST", "localhost")
 DB_PORT: str = os.getenv("DB_PORT", "5432")
