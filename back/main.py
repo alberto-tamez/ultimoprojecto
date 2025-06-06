@@ -1,11 +1,9 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from datetime import timedelta
-import models, schemas, crud, auth
-from database import engine, get_db
+import models
+from database import engine
 from config import get_settings
-from routes import users, logs, history
+from routes import users, logs, history, auth
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
@@ -25,6 +23,7 @@ app.add_middleware(
 app.include_router(users.router)
 app.include_router(logs.router)
 app.include_router(history.router)
+app.include_router(auth.router)
 
 # Root endpoint
 @app.get("/")
