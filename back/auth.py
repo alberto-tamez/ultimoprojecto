@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 import models
 import crud
 from config import get_settings
-from database import get_db
+from .database import get_db
 import requests
 from jose import jwt
 import json

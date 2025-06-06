@@ -4,7 +4,7 @@ import models
 import schemas
 import crud
 import auth
-from database import get_db
+from ..database import get_db
 
 router = APIRouter()
 

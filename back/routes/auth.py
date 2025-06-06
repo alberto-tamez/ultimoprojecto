@@ -8,7 +8,7 @@ import crud
 import json
 import requests
 from datetime import datetime
-from database import get_db
+from ..database import get_db
 from config import get_settings
 from functools import lru_cache
 

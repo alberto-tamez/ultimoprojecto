@@ -9,7 +9,7 @@ from auth import get_current_user
 import models
 
 # Import database module for dependency override and DB engine
-from database import get_db, Base, engine, SessionLocal
+from ..database import get_db, Base, engine, SessionLocal
 
 # Fixture to set up and tear down the database for the entire test session
 @pytest.fixture(scope="session", autouse=True)
