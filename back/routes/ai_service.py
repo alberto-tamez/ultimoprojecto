@@ -18,9 +18,14 @@ router = APIRouter(
 )
 logger = logging.getLogger(__name__)
 
-# Configuration
+# Configuration - Pure values
 AI_MICROSERVICE_BASE_URL = "http://172.28.69.157:1337"  # Base URL for the AI microservice
-AI_PREDICT_ENDPOINT = f"{AI_MICROSERVICE_BASE_URL}/predict"  # Endpoint for predictions
+AI_PREDICT_ENDPOINT = f"{AI_MICROSERVICE_BASE_URL}/analyze-csv"  # Correct endpoint for CSV analysis
+
+# Pure function to construct API URLs
+def get_ai_endpoint(path: str) -> str:
+    """Pure function to construct AI microservice endpoint URLs"""
+    return f"{AI_MICROSERVICE_BASE_URL}/{path}"
 
 @router.post("/forward/{path:path}")
 @router.get("/forward/{path:path}") # Add GET support
@@ -106,32 +111,79 @@ def validate_file_extension(filename: str) -> bool:
 
 async def process_csv_with_ai(file_content: bytes, filename: str) -> Dict[str, Any]:
     """
-    Process CSV file with the AI microservice.
+    Pure function to process a CSV file with the AI microservice.
     
     Args:
-        file_content: Binary content of the CSV file
+        file_content: Raw bytes of the CSV file
         filename: Name of the file
         
     Returns:
-        dict: Response from the AI microservice
+        Dict[str, Any]: JSON response from the AI microservice
         
     Raises:
         HTTPException: If there's an error communicating with the microservice
     """
     try:
+        # Create immutable data structure for the request
         files = {'file': (filename, file_content, 'text/csv')}
+        
+        # Log the request attempt
+        logger.info(f"Sending request to AI microservice at {AI_PREDICT_ENDPOINT}")
+        
+        # Make the request with proper error handling
         response = requests.post(
             AI_PREDICT_ENDPOINT,
             files=files,
             timeout=30  # 30 seconds timeout
         )
+        
+        # Log the response status
+        logger.info(f"AI microservice response status: {response.status_code}")
+        
+        # Handle HTTP errors
         response.raise_for_status()
+        
+        # Return the parsed JSON response
         return response.json()
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error calling AI microservice: {str(e)}")
+    except requests.exceptions.ConnectionError as e:
+        # Connection errors (e.g., service not running, network issues)
+        error_msg = f"Cannot connect to AI microservice at {AI_PREDICT_ENDPOINT}: {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"AI microservice unavailable: {str(e)}"
+        )
+    except requests.exceptions.Timeout as e:
+        # Timeout errors
+        error_msg = f"Timeout connecting to AI microservice: {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="AI microservice request timed out"
+        )
+    except requests.exceptions.HTTPError as e:
+        # HTTP errors from the microservice
+        error_msg = f"AI microservice returned error: {str(e)}"
+        logger.error(error_msg)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Failed to process request with AI microservice"
+            detail=f"AI microservice error: {str(e)}"
+        )
+    except requests.exceptions.RequestException as e:
+        # All other request errors
+        error_msg = f"Error calling AI microservice: {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to process request with AI microservice: {str(e)}"
+        )
+    except Exception as e:
+        # Unexpected errors
+        error_msg = f"Unexpected error processing request: {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
         )
 
 
