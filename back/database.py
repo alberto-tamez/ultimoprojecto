@@ -1,5 +1,5 @@
 import logging
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
@@ -19,8 +19,11 @@ try:
     
     # Test connection
     with engine.connect() as conn:
-        conn.execute("SELECT 1")
-    logger.info("Database connection successful")
+        result = conn.execute(text("SELECT 1")).fetchone()
+        if result and result[0] == 1:
+            logger.info("Database connection successful")
+        else:
+            raise SQLAlchemyError("Database test query failed")
 except SQLAlchemyError as e:
     logger.error(f"Database connection error: {str(e)}")
     raise
