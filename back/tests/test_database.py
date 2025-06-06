@@ -12,7 +12,7 @@ from functools import lru_cache
 sys.path.append(str(Path(__file__).parent.parent))
 
 # Import database module to use its Base and override engine
-from database import Base, set_test_engine, reset_engine
+from ..database import Base, set_test_engine, reset_engine
 
 # Use SQLite in-memory database for testing
 # This follows functional programming principles by ensuring test isolation and purity

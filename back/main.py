@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from . import models
-from .database import get_engine
-from .config import get_settings
-from .routes import users, logs, history, auth, ai_service
+import models
+from database import get_engine
+from config import get_settings
+from routes import users, logs, history, auth, ai_service
 
 # Get database engine and create tables
 engine = get_engine()
