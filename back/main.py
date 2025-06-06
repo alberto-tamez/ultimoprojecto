@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import models
 from database import get_engine
 from config import get_settings
-from routes import users, logs, history, auth
+from routes import users, logs, history, auth, ai_service
 
 # Get database engine and create tables
 engine = get_engine()
@@ -28,6 +28,7 @@ app.include_router(users.router)
 app.include_router(logs.router)
 app.include_router(history.router)
 app.include_router(auth.router)
+app.include_router(ai_service.router)
 
 # Root endpoint
 @app.get("/")
