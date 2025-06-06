@@ -2,28 +2,34 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
 
-# --- Token Schemas ---
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class TokenData(BaseModel):
-    email: Optional[str] = None
-
 # --- User Schemas ---
 class UserBase(BaseModel):
     email: EmailStr
-    name: str
-    role: str
-    google_id: Optional[str] = None
+    full_name: Optional[str] = None
+    is_admin: bool = False
+    is_active: bool = True
+    workos_user_id: Optional[str] = None
 
 class UserCreate(UserBase):
-    password: Optional[str] = None  # Puede ser None para Google Auth
+    pass
 
 class UserInDB(UserBase):
     id: int
     created_at: datetime
 
+    class Config:
+        from_attributes = True
+
+# --- Session Schemas ---
+class SessionInfo(BaseModel):
+    id: int
+    user_id: int
+    workos_session_id: str
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
     class Config:
         from_attributes = True
 
@@ -51,12 +57,13 @@ class PredictionResponse(BaseModel):
 class PredictionLog(BaseModel):
     """
     Schema for prediction history entries.
+    Pure data representation following functional programming principles.
     """
     id: int  # Unique identifier for the log entry
     user_id: int  # ID of the user who made the prediction
-    timestamp: datetime  # When the prediction was made
+    created_at: datetime  # When the prediction was made
     result: str  # Result of the prediction
-    filename: str  # Name of the file that was submitted
+    file_name: Optional[str] = None  # Name of the file that was submitted
 
     class Config:
         from_attributes = True

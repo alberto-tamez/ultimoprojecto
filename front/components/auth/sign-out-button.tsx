@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
+import { signOut } from '@workos-inc/authkit-nextjs';
 
 interface SignOutButtonProps {
   className?: string;
@@ -22,25 +23,42 @@ export function SignOutButton({
     setIsLoading(true);
 
     try {
-      // Call the logout API route
-      const response = await fetch('/api/auth/logout', { 
-        method: 'GET',
-        redirect: 'follow'
+      // Step 1: Call backend logout endpoint to clear its session and cookie
+      const backendRes = await fetch('/auth/logout', {
+        method: 'POST',
+        credentials: 'include', // Important to send cookies
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
-      
-      // If we get here, the fetch didn't follow the redirect (shouldn't happen with redirect: 'follow')
-      // So we'll handle it manually
-      if (response.redirected) {
-        window.location.href = response.url;
-      } else {
-        // Fallback to signed-out page
-        window.location.href = '/signed-out';
+
+      if (!backendRes.ok) {
+        // Log the error but proceed to AuthKit logout to ensure frontend session is cleared
+        console.error('Backend sign out failed. Status:', backendRes.status, 'Response:', await backendRes.text());
+        // Depending on policy, you might throw an error or just log and continue.
+        // For robustness in logout, we'll attempt AuthKit logout regardless in the next step.
       }
+
+      // Step 2: Call AuthKit's signOut to clear frontend session and handle redirection.
+      // AuthKit's signOut will typically redirect to the configured sign-out page
+      // or through WorkOS global logout, then to your app's signed-out page.
+      await signOut(); 
+      // No explicit window.location.href needed here; signOut handles page navigation.
+
     } catch (error) {
-      console.error('Error during sign out:', error);
-      // Still redirect to signed-out page even if there's an error
-      window.location.href = '/signed-out';
+      console.error('Error during sign out process:', error);
+      // If AuthKit's signOut itself fails or if there was a critical error before it,
+      // this block will catch it. You might want a fallback redirect here if signOut
+      // doesn't navigate on its own error, though typically it should.
+      // Example fallback (consider if AuthKit's default redirect isn't working):
+      // const appUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL;
+      // const finalSignedOutUrl = appUrlFromEnv 
+      //   ? `${appUrlFromEnv}/signed-out` 
+      //   : '/signed-out';
+      // window.location.href = finalSignedOutUrl;
     } finally {
+      // Since signOut() causes navigation, this part might not execute if successful.
+      // If signOut can error without navigating, then it's useful to reset loading state.
       setIsLoading(false);
     }
   };
