@@ -1,14 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Body
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from jose import jwt, JWTError
-from typing import Optional
+from jose import jwt
+from typing import Dict, Any
 import workos
 import crud
 import json
-from datetime import datetime, timedelta
+import requests
+from datetime import datetime
 from database import get_db
 from config import get_settings
+from functools import lru_cache
 
 # Initialize WorkOS client
 settings = get_settings()
@@ -18,68 +20,101 @@ workos.redirect_uri = settings.WORKOS_REDIRECT_URI
 
 router = APIRouter()
 
-# Remove the startup event handler since we're initializing WorkOS at the module level
+# WorkOS JWKS URL for token validation
+WORKOS_JWKS_URL = "https://api.workos.com/.well-known/jwks.json"
+
+@lru_cache(maxsize=1)
+def get_workos_jwks() -> Dict[str, Any]:
+    """Fetch and cache WorkOS JWKS (JSON Web Key Set)"""
+    response = requests.get(WORKOS_JWKS_URL)
+    response.raise_for_status()
+    return response.json()
+
+def get_jwk_by_kid(token: str) -> Dict[str, Any]:
+    """Extract the key ID from token header and find the matching JWK"""
+    unverified_header = jwt.get_unverified_header(token)
+    kid = unverified_header.get("kid")
+    if not kid:
+        raise ValueError("No 'kid' in token header")
+        
+    jwks = get_workos_jwks()
+    for jwk in jwks.get("keys", []):
+        if jwk.get("kid") == kid:
+            return jwk
+            
+    raise ValueError(f"No JWK found for kid: {kid}")
+
+def validate_workos_token(token: str) -> Dict[str, Any]:
+    """Validate a WorkOS JWT token using JWKS"""
+    try:
+        jwk = get_jwk_by_kid(token)
+        public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
+        payload = jwt.decode(
+            token,
+            public_key,
+            algorithms=["RS256"],
+            audience=settings.WORKOS_CLIENT_ID
+        )
+        return payload
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid WorkOS token: {str(e)}")
 
 @router.get("/api/auth/login")
 async def login():
     """
-    Returns the authorization URL to redirect the user to WorkOS for authentication.
+    Returns the authorization URL for WorkOS User Management authentication.
     
     The frontend will redirect to this URL, WorkOS will authenticate the user,
-    and then redirect back to the frontend's callback URL (localhost:3000/callback).
-    The frontend will then handle the callback and make API calls to the backend.
+    and then redirect back to the frontend's callback URL.
     """
-    settings = get_settings()
-    authorization_url = workos.client.sso.get_authorization_url(
+    authorization_url = workos.user_management.get_authorization_url(
         client_id=settings.WORKOS_CLIENT_ID,
-        redirect_uri=settings.WORKOS_REDIRECT_URI,  # This should be localhost:3000/callback
-        state=json.dumps({"provider": "Google"}),  # Or make this configurable
+        redirect_uri=settings.WORKOS_REDIRECT_URI,
+        provider="google"  # Can be made configurable
     )
     return {"authorization_url": authorization_url}
 
 @router.post("/api/auth/callback")
 async def callback(payload: dict = Body(...), response: Response = None, db: Session = Depends(get_db)):
     """
-    Handles the callback from WorkOS after authentication, exchanges code for tokens, provisions user, sets session cookie.
+    Handles the callback from WorkOS after authentication.
+    Exchanges code for tokens, provisions user, and sets WorkOS access_token as session cookie.
     """
     try:
         # Extract code from payload
         code = payload.get("code")
-        
         if not code:
             raise HTTPException(status_code=400, detail="Missing code parameter")
 
-        # Exchange code for tokens
-        tokens = workos.client.user_management.get_connection_tokens(
+        # Exchange code for tokens using WorkOS User Management
+        auth_response = workos.user_management.authenticate_with_code(
             code=code,
-            redirect_uri=settings.WORKOS_REDIRECT_URI,
+            client_id=settings.WORKOS_CLIENT_ID,
+            redirect_uri=settings.WORKOS_REDIRECT_URI
         )
-
-        # Get user info from WorkOS
-        workos_user = workos.client.user_management.get_user(tokens.user_id)
+        
+        # Extract tokens and user info
+        access_token = auth_response["access_token"]
+        refresh_token = auth_response["refresh_token"]
+        user = auth_response["user"]
+        session_id = auth_response["session_id"]
         
         # Create or update user in our database
-        db_user = crud.create_or_update_user(db, workos_user)
+        db_user = crud.create_or_update_user(db, user)
         
-        # Create a new app session
-        crud.create_app_session(db, db_user.id, tokens)
+        # Store session info and refresh token
+        session_data = {
+            "session_id": session_id,
+            "refresh_token": refresh_token,
+            "user_id": user["id"]
+        }
+        crud.create_app_session(db, db_user.id, session_data)
         
-        # Create JWT access token
-        access_token = create_access_token(
-            data={
-                "sub": str(db_user.id),
-                "sid": tokens.session_id,
-                "workos_user_id": tokens.user_id,
-                "email": workos_user.email
-            },
-            expires_delta=timedelta(minutes=30)
-        )
-        
-        # Set secure HTTP-only cookie
+        # Set WorkOS access_token directly as secure HTTP-only cookie
         response = JSONResponse(content={"message": "Login successful"})
         response.set_cookie(
             key="session_token",
-            value=access_token,
+            value=access_token,  # Using WorkOS token directly
             httponly=True,
             secure=True,
             samesite="lax",
@@ -91,46 +126,44 @@ async def callback(payload: dict = Body(...), response: Response = None, db: Ses
         
         return response
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"Authentication error: {str(e)}")
 
 
 @router.post("/auth/logout")
 async def logout(response: Response, request: Request, db: Session = Depends(get_db)):
     """
     Handles user logout by:
-    1. Invalidating the local session
-    2. Getting the WorkOS logout URL
-    3. Clearing the session cookie
+    1. Validating the WorkOS token
+    2. Invalidating the local session
+    3. Getting the WorkOS logout URL
+    4. Clearing the session cookie
     """
     print("--- LOGOUT ENDPOINT HIT ---") # DEBUG LINE
     try:
-        # Get the session token from the cookie
-        session_token = request.cookies.get("session_token")
-        if not session_token:
+        # Get the WorkOS access token from the cookie
+        access_token = request.cookies.get("session_token")
+        if not access_token:
             raise HTTPException(status_code=401, detail="Not authenticated")
 
-        # Decode the JWT to get the session ID and user info
+        # Validate the WorkOS token and extract claims
         try:
-            payload = jwt.decode(
-                session_token,
-                settings.WORKOS_COOKIE_PASSWORD,
-                algorithms=["HS256"]
-            )
+            payload = validate_workos_token(access_token)
             session_id = payload.get("sid")
             user_id = payload.get("sub")
-            if not session_id or not user_id:
-                raise ValueError("Invalid session token")
-        except (JWTError, ValueError) as e:
-            raise HTTPException(status_code=401, detail=str(e))
+            if not session_id:
+                raise ValueError("No session ID in token")
+        except Exception as e:
+            raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
         # Get the WorkOS logout URL
-        logout_url = f"https://{settings.WORKOS_AUTH_DOMAIN}/user_management/sessions/logout?session_id={session_id}"
+        logout_url = f"https://api.workos.com/user_management/sessions/logout?session_id={session_id}"
 
         # Invalidate the session in our database
         crud.invalidate_session(db, session_id)
         
-        # Log activity
-        crud.create_activity_log(db, int(user_id), "logout")
+        # Log activity if we have a user ID
+        if user_id:
+            crud.create_activity_log(db, user_id, "logout")
 
         # Clear the session cookie
         response.delete_cookie("session_token")
@@ -142,38 +175,39 @@ async def logout(response: Response, request: Request, db: Session = Depends(get
 
     except Exception as e:
         print(f"--- ERROR IN LOGOUT ENDPOINT (auth.py): {type(e).__name__} - {str(e)} ---") # DEBUG LINE
-        # import traceback
-        # print(traceback.format_exc()) # Uncomment for full traceback if needed
         raise HTTPException(status_code=500, detail=f"Internal server error during logout: {str(e)}")
 
 
 @router.get("/api/auth/me")
 async def get_me(request: Request, db: Session = Depends(get_db)):
     """
-    Returns the current authenticated user's info if the session is valid, else 401.
+    Returns the current authenticated user's info if the WorkOS session is valid, else 401.
     """
-    token = request.cookies.get("session_token")
-    if not token:
+    access_token = request.cookies.get("session_token")
+    if not access_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = jwt.decode(
-            token,
-            settings.WORKOS_COOKIE_PASSWORD,
-            algorithms=["HS256"]
-        )
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token")
         
-        # Get user info
-        user = crud.get_user_by_id(db, id=int(user_id))
+    try:
+        # Validate WorkOS token
+        payload = validate_workos_token(access_token)
+        workos_user_id = payload.get("sub")
+        session_id = payload.get("sid")
+        
+        if not workos_user_id or not session_id:
+            raise HTTPException(status_code=401, detail="Invalid token claims")
+        
+        # Get user from our database by WorkOS user ID
+        user = crud.get_user_by_workos_id(db, workos_user_id)
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
             
         # Get current session info
-        session = crud.get_app_session_by_workos_session_id(db, payload.get("sid"))
+        session = crud.get_app_session_by_workos_session_id(db, session_id)
         if not session:
             raise HTTPException(status_code=401, detail="Invalid session")
+        
+        # Update last activity
+        crud.update_session_activity(db, session.id)
             
         return {
             "id": user.id,
@@ -187,19 +221,41 @@ async def get_me(request: Request, db: Session = Depends(get_db)):
                 "last_activity": session.updated_at
             }
         }
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Authentication error: {str(e)}")
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+# Helper function to refresh an expired WorkOS token
+async def refresh_workos_token(refresh_token: str) -> Dict[str, str]:
     """
-    Create a JWT access token.
+    Use a refresh token to get a new access token from WorkOS.
+    Returns a dict with new access_token and refresh_token.
     """
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-    return encoded_jwt
+    try:
+        token_response = workos.user_management.refresh_authentication(
+            refresh_token=refresh_token,
+            client_id=settings.WORKOS_CLIENT_ID
+        )
+        return {
+            "access_token": token_response["access_token"],
+            "refresh_token": token_response["refresh_token"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Failed to refresh token: {str(e)}")
+
+# Helper function to check if a token needs refreshing
+def token_needs_refresh(payload: Dict[str, Any]) -> bool:
+    """
+    Check if a token is close to expiration and needs refreshing.
+    Returns True if token expires in less than 5 minutes.
+    """
+    exp = payload.get("exp")
+    if not exp:
+        return False
+        
+    expiration = datetime.fromtimestamp(exp)
+    now = datetime.utcnow()
+    time_left = expiration - now
+    
+    # Refresh if less than 5 minutes left
+    return time_left.total_seconds() < 300  # 5 minutes in seconds

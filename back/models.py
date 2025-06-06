@@ -29,6 +29,7 @@ class User(Base): # Define the User model
     predictions = relationship("Prediction", back_populates="user")
     activity_logs = relationship("ActivityLog", back_populates="user")
     app_sessions = relationship("AppSession", back_populates="user")
+    prediction_logs = relationship("PredictionLog", back_populates="user")
 
 class Log(Base): # Define the Log model
     __tablename__ = "logs"
@@ -80,3 +81,16 @@ class AppSession(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="app_sessions")
+
+class PredictionLog(Base):
+    """Model for prediction logs table in the database"""
+    __tablename__ = "prediction_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    result = Column(String, nullable=False)
+    file_name = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationship to User model
+    user = relationship("User", back_populates="prediction_logs")

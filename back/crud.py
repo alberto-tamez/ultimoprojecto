@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
+from datetime import datetime
 import models
-import schemas
 
 def get_user(db: Session, user_id: int):
     return db.query(models.User).filter(models.User.id == user_id).first()
@@ -89,3 +89,58 @@ def invalidate_session(db: Session, workos_session_id: str):
         db.commit()
         return True
     return False
+
+def update_session_activity(db: Session, session_id: int):
+    """
+    Update the activity timestamp for a session.
+    """
+    session = db.query(models.AppSession).filter(models.AppSession.id == session_id).first()
+    if session:
+        session.updated_at = datetime.utcnow()
+        db.commit()
+        return True
+    return False
+
+def update_session_refresh_token(db: Session, session_id: int, refresh_token: str):
+    """
+    Update the refresh token for a session.
+    """
+    session = db.query(models.AppSession).filter(models.AppSession.id == session_id).first()
+    if session:
+        session.encrypted_refresh_token = refresh_token
+        db.commit()
+        return True
+    return False
+
+def create_prediction_log(db: Session, user_id: int, result: str, file_name: str = None):
+    """
+    Create a new prediction log entry.
+    
+    Following functional programming principles:
+    - Pure function with clear inputs and outputs
+    - Creates new data rather than mutating existing data
+    - Returns the created entity without side effects beyond database persistence
+    
+    Args:
+        db: Database session
+        user_id: ID of the user who made the prediction
+        result: Result of the prediction
+        file_name: Optional name of the file that was analyzed
+        
+    Returns:
+        The newly created PredictionLog object
+    """
+    # Create a new immutable object
+    prediction_log = models.PredictionLog(
+        user_id=user_id,
+        result=result,
+        file_name=file_name
+    )
+    
+    # Persist to database
+    db.add(prediction_log)
+    db.commit()
+    db.refresh(prediction_log)
+    
+    # Return the new entity
+    return prediction_log
