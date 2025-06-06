@@ -164,7 +164,30 @@ async def logout(request: Request, db: Session = Depends(get_db)):
 
             if workos_session_id:
                 crud.invalidate_session(db, workos_session_id)
-                response_content = {"message": "Backend session invalidated."}
+                response_content = {"message": "Backend session invalidated locally."}
+
+                # Also invalidate the WorkOS session remotely
+                try:
+                    workos_api_key = settings.WORKOS_API_KEY
+                    headers = {
+                        "Authorization": f"Bearer {workos_api_key}",
+                        "Content-Type": "application/json"
+                    }
+                    remote_logout_payload = {"session_id": workos_session_id}
+                    logout_response = requests.post(
+                        "https://api.workos.com/user_management/logout",
+                        headers=headers,
+                        json=remote_logout_payload,
+                        timeout=5  # seconds
+                    )
+                    logout_response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
+                    print(f"Successfully invalidated WorkOS session {workos_session_id} remotely.")
+                    response_content['message'] += " WorkOS session also invalidated remotely."
+                except requests.exceptions.RequestException as workos_logout_error:
+                    print(f"WorkOS remote logout failed for session {workos_session_id}: {workos_logout_error}")
+                    # Optionally, update response_content to indicate partial success if needed
+                    response_content['message'] += " Failed to invalidate WorkOS session remotely, but local session cleared."
+                    # Do not let this error stop the rest of the logout flow (e.g., cookie clearing)
             else:
                 print("Logout: Valid token but no 'sid' found.")
                 response_content = {"message": "Backend logout: No session ID in token to invalidate."}
