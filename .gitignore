@@ -6,3 +6,24 @@ back/routes/__pycache__
 back/.env
 back/tests/__pycache__
 back/routes/__pycache__
+# Entornos virtuales
+venv/
+ENV/
+env/
+.venv/
+# Archivos de Python
+_pycache_/
+*.py[cod]
+*.so
+# Archivos grandes de datos o modelos
+*.pth
+*.pt
+*.h5
+*.csv
+*.log
+# Archivos de Jupyter
+*.ipynb
+.ipynb_checkpoints/
+# Archivos del sistema
+.DS_Store
+Thumbs.db
