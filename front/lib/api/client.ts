@@ -124,10 +124,16 @@ class ApiClient {
    * In production, this should call the backend endpoint.
    */
   async logout(): Promise<{ workos_logout_url: string }> {
-    // Simulate backend response for frontend testing
-    return {
-      workos_logout_url: 'https://workos_auth_domain/user_management/session/logout?session_id=dummy',
-    };
+    // Call the backend logout endpoint
+    const response = await this.request<{ workos_logout_url: string }>('auth/logout', {
+      method: 'POST',
+    });
+
+    if (!response.success) {
+      throw new Error(response.error.message);
+    }
+
+    return response.data;
   }
 
   // ===== Utility Methods =====

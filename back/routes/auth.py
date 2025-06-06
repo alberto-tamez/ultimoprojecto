@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Body
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from typing import Optional
 import workos
-import schemas
 import crud
 import json
 from datetime import datetime, timedelta
@@ -37,7 +36,6 @@ async def callback(code: str, request: Request, db: Session = Depends(get_db)):
     """
     [DEPRECATED] Use POST /api/auth/callback instead. This endpoint is kept for backward compatibility.
     """
-    return RedirectResponse(url="/")
 
 
 @router.post("/api/auth/callback")
@@ -49,38 +47,91 @@ async def post_callback(
     """
     Handles the callback from WorkOS after authentication, exchanges code for tokens, provisions user, sets session cookie.
     """
+    # Extract code from payload
     code = payload.get("code")
+    
     if not code:
-        raise HTTPException(status_code=400, detail="Missing code in request body")
+        raise HTTPException(status_code=400, detail="Missing code parameter")
+
     try:
-        profile = workos.client.sso.get_profile_and_token(code)
-        user_info = profile.profile
-        user = crud.get_user_by_email(db, email=user_info.email)
-        if not user:
-            user_data = schemas.UserCreate(
-                email=user_info.email,
-                name=f"{user_info.first_name} {user_info.last_name}".strip(),
-                role="user",
-                google_id=user_info.id,
-            )
-            user = crud.create_user(db=db, user=user_data)
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        # Exchange code for tokens
+        tokens = workos.client.sso.get_connection_tokens(
+            code=code,
+            redirect_uri=settings.WORKOS_REDIRECT_URI,
+        )
+
+        # Create or update user
+        user = await crud.get_or_create_user(db, tokens)
+        
+        # Create JWT access token
         access_token = create_access_token(
-            data={"sub": user.email},
-            expires_delta=access_token_expires
+            data={"sub": user.id, "sid": tokens.session.id},
+            expires_delta=timedelta(hours=8)  # Match the frontend cookie duration
         )
-        resp = JSONResponse(status_code=200, content={"message": "Authenticated"})
-        resp.set_cookie(
-            key="access_token",
-            value=f"Bearer {access_token}",
+
+        # Set the session cookie
+        response.set_cookie(
+            key="session_token",
+            value=access_token,
             httponly=True,
-            max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             secure=not settings.DEBUG,
-            samesite="lax"
+            samesite="lax",
+            max_age=60 * 60 * 8,  # 8 hours
         )
-        return resp
-    except Exception:
-        raise HTTPException(status_code=400, detail="Could not validate credentials")
+
+        return {"user": user, "session_token": access_token}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/auth/logout")
+async def logout(response: Response, request: Request, db: Session = Depends(get_db)):
+    """
+    Handles user logout by:
+    1. Invalidating the local session
+    2. Getting the WorkOS logout URL
+    3. Clearing the session cookie
+    """
+    try:
+        # Get the session token from the cookie
+        session_token = request.cookies.get("session_token")
+        if not session_token:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        # Decode the JWT to get the session ID and user info
+        try:
+            payload = jwt.decode(
+                session_token,
+                settings.WORKOS_COOKIE_PASSWORD,
+                algorithms=["HS256"]
+            )
+            session_id = payload.get("sid")
+            user_id = payload.get("sub")
+            if not session_id or not user_id:
+                raise ValueError("Invalid session token")
+        except (JWTError, ValueError) as e:
+            raise HTTPException(status_code=401, detail=str(e))
+
+        # Get the WorkOS logout URL
+        logout_url = f"https://api.workos.com/user_management/sessions/logout?session_id={session_id}"
+
+        # Invalidate the session in our database
+        crud.invalidate_session(db, session_id)
+        
+        # Log activity
+        crud.create_activity_log(db, int(user_id), "logout")
+
+        # Clear the session cookie
+        response.delete_cookie("session_token")
+
+        return JSONResponse(
+            content={"workos_logout_url": logout_url},
+            status_code=200
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/api/auth/me")
@@ -88,30 +139,44 @@ async def get_me(request: Request, db: Session = Depends(get_db)):
     """
     Returns the current authenticated user's info if the session is valid, else 401.
     """
-    token = request.cookies.get("access_token")
-    if not token or not token.startswith("Bearer "):
+    token = request.cookies.get("session_token")
+    if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        payload = jwt.decode(token[7:], settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email = payload.get("sub")
-        if not email:
+        payload = jwt.decode(
+            token,
+            settings.WORKOS_COOKIE_PASSWORD,
+            algorithms=["HS256"]
+        )
+        user_id = payload.get("sub")
+        if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-        user = crud.get_user_by_email(db, email=email)
+        
+        # Get user info
+        user = crud.get_user_by_id(db, id=int(user_id))
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
-        return {"id": user.id, "email": user.email, "name": user.name}
+            
+        # Get current session info
+        session = crud.get_app_session_by_workos_session_id(db, payload.get("sid"))
+        if not session:
+            raise HTTPException(status_code=401, detail="Invalid session")
+            
+        return {
+            "id": user.id,
+            "email": user.email,
+            "name": user.full_name,
+            "is_admin": user.is_admin,
+            "is_active": user.is_active,
+            "session": {
+                "ip_address": session.ip_address,
+                "user_agent": session.user_agent,
+                "last_activity": session.updated_at
+            }
+        }
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-@router.post("/api/auth/logout")
-async def logout(response: Response):
-    """
-    Log the user out by clearing the authentication cookie.
-    Returns the WorkOS logout URL to end the global session.
-    """
-    resp = JSONResponse({"workos_logout_url": "https://api.workos.com/user_management/sessions/logout"})
-    resp.delete_cookie(key="access_token", httponly=True, samesite="lax")
-    return resp
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """
