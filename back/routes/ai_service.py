@@ -12,15 +12,18 @@ from models import User  # User model for type hinting
 from config import get_settings  # For potential future configuration
 
 settings = get_settings()
-router = APIRouter()
+router = APIRouter(
+    prefix="/api/ai",
+    tags=["ai"],
+)
 logger = logging.getLogger(__name__)
 
 # Configuration
 AI_MICROSERVICE_BASE_URL = "http://172.28.69.157:1337"  # Base URL for the AI microservice
 AI_PREDICT_ENDPOINT = f"{AI_MICROSERVICE_BASE_URL}/predict"  # Endpoint for predictions
 
-@router.post("/api/ai/forward/{path:path}")
-@router.get("/api/ai/forward/{path:path}") # Add GET support
+@router.post("/forward/{path:path}")
+@router.get("/forward/{path:path}") # Add GET support
 async def forward_to_ai_microservice(
     path: str, # Captures the rest of the path
     request: Request,
@@ -132,7 +135,76 @@ async def process_csv_with_ai(file_content: bytes, filename: str) -> Dict[str, A
         )
 
 
-@router.post("/api/ai/predict")
+# Pure function to check if a file is a CSV
+def is_csv_file(filename: str) -> bool:
+    """Pure function to validate if a filename has a .csv extension"""
+    return filename.lower().endswith('.csv')
+
+@router.get("/test")
+async def test_connection():
+    """Test endpoint to verify API connectivity without authentication"""
+    return {"status": "success", "message": "AI service API is accessible"}
+
+@router.get("/test-auth")
+async def test_auth_connection(current_user: User = Depends(get_current_active_user)):
+    """Test endpoint to verify authentication is working"""
+    return {
+        "status": "success", 
+        "message": "Authentication successful", 
+        "user": {
+            "id": current_user.id,
+            "email": current_user.email,
+            "is_active": current_user.is_active
+        }
+    }
+
+@router.post("/predict-test", include_in_schema=True)
+async def predict_from_csv_test(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+) -> JSONResponse:
+    """
+    Test endpoint to accept a CSV file and forward it to the AI microservice without authentication.
+    This is for testing purposes only and should be removed in production.
+    
+    Args:
+        file: CSV file to process
+        db: Database session
+        
+    Returns:
+        JSONResponse: Response from the AI microservice
+    """
+    # Validate file extension
+    if not validate_file_extension(file.filename):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only CSV files are accepted"
+        )
+    
+    try:
+        # Read file content
+        file_content = await file.read()
+        
+        # Process the CSV with the AI microservice
+        result = await process_csv_with_ai(file_content, file.filename)
+        
+        # Log the successful request
+        logger.info(f"Successfully processed CSV file: {file.filename}")
+        
+        # Return the AI microservice response
+        return JSONResponse(content=result)
+    except HTTPException as e:
+        # Re-raise HTTP exceptions
+        raise e
+    except Exception as e:
+        # Log and handle other exceptions
+        logger.error(f"Error processing CSV file: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing CSV file: {str(e)}"
+        )
+
+@router.post("/predict")
 async def predict_from_csv(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
