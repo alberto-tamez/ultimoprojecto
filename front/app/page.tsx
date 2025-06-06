@@ -1,33 +1,37 @@
 'use client';
 
 import { useState } from 'react';
-// useRouter is not used, so it can be removed if not needed for other functionality later
-// import { useRouter } from 'next/navigation'; 
 import { signOut } from '@workos-inc/authkit-nextjs';
 import { useAuth } from '@workos-inc/authkit-nextjs/components';
-import { Navigation } from '@/components/navigation';
+import { useUser } from "@/lib/hooks/useUser";
+import { apiClient } from "@/lib/api/client";
+import { Navigation, type NavigationUser } from '@/components/navigation';
 import { Dashboard } from '@/components/dashboard';
 
-// Define a more specific type for the user object expected by Navigation
-interface NavigationUser {
-  email: string;
-  name: string;
-  role: string;
-}
+/**
+ * Main application page that handles authentication and routing
+ */
 
 export default function MainPage() {
-  // const router = useRouter(); // Not currently used
-  const { user, loading } = useAuth({ ensureSignedIn: true });
+  // Auth state from WorkOS
+  const { user: authUser, loading: authLoading } = useAuth({ ensureSignedIn: true });
+  
+  // User data from our API
+  const { user, loading: userLoading, error: userError, refreshUser } = useUser();
+  
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'profile'>('dashboard');
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [error, setError] = useState<string | { message: string } | null>(null);
 
+  // Handle sign out with error handling
   const handleSignOut = async () => {
     try {
-      // The logout API route /api/auth/logout will handle the redirect to /signed-out
-      await signOut(); 
+      const result = await apiClient.logout();
+      window.location.href = result.workos_logout_url;
     } catch (err) {
-      console.error('Error during sign out:', err);
-      // Optionally, redirect to a generic error page or /signed-out as a fallback
-      // window.location.href = '/signed-out?error=signout_failed_client';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to sign out';
+      console.error('Sign out error:', errorMessage);
+      setSignOutError(errorMessage);
     }
   };
 
@@ -35,17 +39,43 @@ export default function MainPage() {
     setCurrentPage(page);
   };
 
-  if (loading) {
+  // Combine loading states
+  const isLoading = authLoading || userLoading;
+
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <p className="text-lg text-gray-700">Loading...</p>
+        <div className="text-center">
+          <p className="text-lg text-gray-700 mb-2">Loading your dashboard...</p>
+          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        </div>
       </div>
     );
   }
 
-  if (!user) {
-    // This state should ideally be handled by middleware + ensureSignedIn: true
-    // by redirecting to the login page automatically.
+  // Handle errors
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+        <div className="max-w-md w-full bg-white p-6 rounded-lg shadow-md">
+          <h2 className="text-xl font-semibold text-red-600 mb-4">Error Loading Data</h2>
+          <p className="text-gray-700 mb-4">
+            We couldn't load your data.
+            {typeof error === 'string' && ` ${error}`}
+            {typeof error === 'object' && error && 'message' in error && ` ${error.message}`}
+          </p>
+          <button
+            onClick={refreshUser}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <p className="text-lg text-gray-700">Redirecting to login...</p>
@@ -54,16 +84,10 @@ export default function MainPage() {
   }
 
   // Prepare the user object for the Navigation component
-  // The WorkOS User object might have nullable fields, so provide defaults.
   const navigationUser: NavigationUser | null = user
     ? {
-        email: user.email ?? 'N/A',
-        name: user.firstName
-          ? `${user.firstName} ${user.lastName ?? ''}`.trim()
-          : user.email ?? 'User',
-        // Assuming 'role' might come from customAttributes or a similar field
-        // If not, provide a default or adjust based on your WorkOS user schema
-        role: (user as any).customAttributes?.role ?? (user as any).role ?? 'User',
+        ...user,
+        role: user.is_admin ? 'admin' : 'user',
       }
     : null;
 
@@ -83,12 +107,19 @@ export default function MainPage() {
           <div className="text-center p-10 bg-white rounded-lg shadow">
             <h2 className="text-2xl font-semibold">Profile Page</h2>
             <p className="text-gray-600">This is where user profile information will be displayed.</p>
+            {error && typeof error === 'string' && (
+  <div className="text-red-600 text-sm mt-2">{error}</div>
+)}
+{error && typeof error === 'object' && 'message' in error && (
+  <div className="text-red-600 text-sm mt-2">{error.message}</div>
+)}
             {user && (
               <div className="mt-4 text-left text-sm text-gray-700">
                 <p><strong>ID:</strong> {user.id}</p>
+                <p><strong>WorkOS User ID:</strong> {user.workos_user_id}</p>
                 <p><strong>Email:</strong> {user.email}</p>
-                <p><strong>First Name:</strong> {user.firstName}</p>
-                <p><strong>Last Name:</strong> {user.lastName}</p>
+                <p><strong>Name:</strong> {user.full_name}</p>
+                <p><strong>Admin:</strong> {user.is_admin ? 'Yes' : 'No'}</p>
                 {/* Add other user details as needed */}
               </div>
             )}
