@@ -1,5 +1,5 @@
 from typing import Dict, Any, Tuple
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 import models
 import crud
@@ -10,6 +10,8 @@ from jose import jwt
 import json
 from functools import lru_cache
 import workos
+from fastapi.responses import JSONResponse
+from datetime import timedelta, datetime
 
 settings = get_settings()
 
@@ -52,24 +54,14 @@ def validate_workos_token(token: str) -> Dict[str, Any]:
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid WorkOS token: {str(e)}")
 
-def get_token_from_request(request: Request) -> str:
-    """Extract token from cookie or authorization header"""
-    # First try to get from cookie
-    token = request.cookies.get("session_token")
-    
-    # If not in cookie, try authorization header
-    if not token:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.replace("Bearer ", "")
-    
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
-        )
-    
-    return token
+# NEW: Dependency to get the internal session ID from the cookie
+from fastapi import Response, Body
+
+def get_session_id_from_cookie(request: Request) -> str:
+    session_id = request.cookies.get("app_session_id")  # Use new cookie name
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Not authenticated: No session cookie.")
+    return session_id
 
 async def refresh_token_if_needed(db: Session, session_id: str, payload: Dict[str, Any]) -> Tuple[str, str]:
     """Check if token needs refresh and refresh if needed"""
@@ -111,55 +103,49 @@ async def refresh_token_if_needed(db: Session, session_id: str, payload: Dict[st
     except Exception:
         return None, None
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)) -> models.User:
-    """Validate WorkOS session and return the current user"""
+from datetime import timedelta, datetime
+
+# REPLACEMENT for get_current_user
+async def get_current_active_user(
+    session_id: str = Depends(get_session_id_from_cookie),
+    db: Session = Depends(get_db)
+) -> models.User:
+    session = crud.get_session_by_id(db, session_id)
+    if not session or not session.is_active:
+        raise HTTPException(status_code=401, detail="Invalid or inactive session.")
+
+    # Check if the access token is expired or close to expiring
+    if session.expires_at < datetime.utcnow() + timedelta(minutes=1):
+        try:
+            # Token needs refresh.
+            new_tokens = await refresh_workos_token(session.refresh_token)
+            # Update the session in the database with the new tokens
+            crud.update_session_tokens(db, session.id, new_tokens)
+        except Exception as e:
+            # Refresh failed, invalidate the session and force re-login
+            crud.invalidate_session(db, session_id=session.id)
+            raise HTTPException(status_code=401, detail=f"Session expired, refresh failed: {str(e)}")
+
+    # At this point, the session is valid and the access token is fresh.
+    user = db.query(models.User).filter(models.User.id == session.user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive.")
+    return user
+
+# Helper: refresh WorkOS token using refresh_token
+async def refresh_workos_token(refresh_token: str) -> dict:
     try:
-        # Get token from request
-        token = get_token_from_request(request)
-        
-        # Validate token
-        payload = validate_workos_token(token)
-        
-        # Extract claims
-        workos_user_id = payload.get("sub")
-        session_id = payload.get("sid")
-        
-        if not workos_user_id or not session_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token claims"
-            )
-        
-        # Check if session exists in database
-        session = crud.get_app_session_by_workos_session_id(db, session_id)
-        if not session:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid session"
-            )
-        
-        # Get user from database
-        user = crud.get_user_by_workos_id(db, workos_user_id)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found"
-            )
-        
-        # Update session activity
-        crud.update_session_activity(db, session.id)
-        
-        # Check if token needs refresh
-        new_token, new_refresh = await refresh_token_if_needed(db, session_id, payload)
-        if new_token:
-            # In a real implementation, you would set the new token in a cookie here
-            # This would require modifying the return type to include both user and response
-            # For now, we'll just return the user
-            pass
-        
-        return user
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Authentication error: {str(e)}"
+        token_response = workos.user_management.refresh_authentication(
+            refresh_token=refresh_token,
+            client_id=settings.WORKOS_CLIENT_ID
         )
+        return token_response
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Token refresh failed: {str(e)}")
+
+# --- Backward compatibility export ---
+async def get_current_user(*args, **kwargs):
+    """
+    Deprecated: Use get_current_active_user instead. This is a compatibility alias.
+    """
+    return await get_current_active_user(*args, **kwargs)

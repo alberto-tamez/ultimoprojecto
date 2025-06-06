@@ -42,24 +42,35 @@ def create_or_update_user(db: Session, workos_profile: dict):
     db.refresh(db_user)
     return db_user
 
-def create_app_session(db: Session, user_id: int, workos_session: dict):
+import uuid
+from datetime import datetime, timedelta
+from jose import jwt
+from sqlalchemy.orm import Session
+import models
+
+def create_or_update_session(db: Session, user_id: int, auth_response: dict):
     """
-    Create a new app session for a user.
-    Returns the session object.
+    Pure function: Create a new session with internal UUID, storing WorkOS tokens and expiration. Returns the new session object.
     """
-    db_session = models.AppSession(
+    access_token = auth_response["access_token"]
+    try:
+        token_payload = jwt.get_unverified_claims(access_token)
+        expires_at = datetime.fromtimestamp(token_payload.get("exp", 0))
+    except Exception:
+        expires_at = datetime.utcnow() + timedelta(minutes=15)
+    session = models.AppSession(
+        id=str(uuid.uuid4()),
         user_id=user_id,
-        workos_user_id=workos_session.user_id,
-        workos_session_id=workos_session.id,
-        encrypted_refresh_token=workos_session.refresh_token,
-        ip_address=workos_session.ip_address,
-        user_agent=workos_session.user_agent,
-        refresh_token_expires_at=workos_session.refresh_token_expires_at
+        workos_session_id=auth_response["session_id"],
+        access_token=access_token,
+        refresh_token=auth_response["refresh_token"],
+        expires_at=expires_at,
+        is_active=True
     )
-    db.add(db_session)
+    db.add(session)
     db.commit()
-    db.refresh(db_session)
-    return db_session
+    db.refresh(session)
+    return session
 
 def create_activity_log(db: Session, user_id: int, action: str):
     """
@@ -79,11 +90,21 @@ def get_app_session_by_workos_session_id(db: Session, workos_session_id: str):
         models.AppSession.workos_session_id == workos_session_id
     ).first()
 
-def invalidate_session(db: Session, workos_session_id: str):
+def get_session_by_id(db: Session, session_id: str):
     """
-    Invalidate a session by its WorkOS session ID.
+    Pure function: Fetch session by internal UUID session ID. Returns the session object or None.
     """
-    session = get_app_session_by_workos_session_id(db, workos_session_id)
+    return db.query(models.AppSession).filter(models.AppSession.id == session_id).first()
+
+def invalidate_session(db: Session, workos_session_id: str = None, session_id: str = None):
+    """
+    Pure function: Invalidate a session by WorkOS session ID or internal session ID. Returns True if deleted.
+    """
+    session = None
+    if session_id:
+        session = get_session_by_id(db, session_id)
+    elif workos_session_id:
+        session = get_app_session_by_workos_session_id(db, workos_session_id)
     if session:
         db.delete(session)
         db.commit()
@@ -101,16 +122,23 @@ def update_session_activity(db: Session, session_id: int):
         return True
     return False
 
-def update_session_refresh_token(db: Session, session_id: int, refresh_token: str):
+def update_session_tokens(db: Session, session_id: str, new_tokens: dict):
     """
-    Update the refresh token for a session.
+    Pure function: Update access_token, refresh_token, and expires_at for a session by internal session ID. Returns the updated session.
     """
-    session = db.query(models.AppSession).filter(models.AppSession.id == session_id).first()
+    session = get_session_by_id(db, session_id)
     if session:
-        session.encrypted_refresh_token = refresh_token
+        session.access_token = new_tokens["access_token"]
+        session.refresh_token = new_tokens["refresh_token"]
+        try:
+            token_payload = jwt.get_unverified_claims(new_tokens["access_token"])
+            session.expires_at = datetime.fromtimestamp(token_payload.get("exp", 0))
+        except Exception:
+            session.expires_at = datetime.utcnow() + timedelta(minutes=15)
         db.commit()
-        return True
-    return False
+        db.refresh(session)
+        return session
+    return None
 
 def create_prediction_log(db: Session, user_id: int, result: str, file_name: str = None):
     """

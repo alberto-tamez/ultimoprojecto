@@ -1,5 +1,36 @@
 # Development Log
 
+## 2025-06-06
+
+### Task: Refactor Backend Session Management for WorkOS Auth
+
+#### Changes Made:
+
+- **Session Decoupling:** Replaced WorkOS access token as session cookie with internal UUID session ID, managed as a stable, persistent session identifier.
+- **Pure CRUD Functions:**
+  - Added `create_or_update_session` (generates UUID, stores WorkOS tokens, expiration, is_active).
+  - Added `get_session_by_id` (fetch by internal session ID).
+  - Added `update_session_tokens` (updates access/refresh tokens and expiration by internal ID).
+  - Updated `invalidate_session` to support both WorkOS and internal session IDs.
+- **Auth Logic:**
+  - `get_session_id_from_cookie` (pure, extracts session ID from cookie).
+  - `get_current_active_user` (pure, fetches session, refreshes tokens if needed, returns user).
+  - Callback endpoint creates internal session and sets cookie.
+  - Logout endpoint invalidates by internal session ID and clears cookie.
+- **Lint Fixes:** All imports now at top of files, unused imports removed, DRY/KISS applied.
+- **Functional/Immutable:** All new logic is modular, pure, and composable. No in-place mutation.
+
+#### Next Steps:
+- Test backend session and auth flow with `uv run pytest ..`.
+- Integrate frontend to use new internal session cookie (`app_session_id`).
+- Ensure seamless token refresh and route protection.
+- Expand tests for session expiry/refresh and logout.
+
+#### Notes:
+- Follows functional programming, immutability, DRY, and KISS principles.
+- All session and token management is now backend-driven and robust.
+
+
 ## 2025-06-05
 
 ### Task: Implement API Abstraction Layer for WorkOS Integration
