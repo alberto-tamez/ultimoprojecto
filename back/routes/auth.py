@@ -75,7 +75,11 @@ async def login():
     return {"authorization_url": authorization_url}
 
 @router.post("/api/auth/callback")
-async def callback(payload: dict = Body(...), response: Response = None, db: Session = Depends(get_db)):
+async def callback(
+    request: Request,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db)
+):
     """
     Handles the callback from WorkOS after authentication.
     Exchanges code for tokens, provisions user, and sets WorkOS access_token as session cookie.
@@ -110,15 +114,23 @@ async def callback(payload: dict = Body(...), response: Response = None, db: Ses
         }
         crud.create_app_session(db, db_user.id, session_data)
         
-        # Set WorkOS access_token directly as secure HTTP-only cookie
-        response = JSONResponse(content={"message": "Login successful"})
+        # Set WorkOS access_token as secure HTTP-only cookie
+        response = JSONResponse(
+            content={"message": "Login successful"},
+            headers={
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Allow-Origin": request.headers.get("origin", "http://localhost:3000")
+            }
+        )
         response.set_cookie(
             key="session_token",
-            value=access_token,  # Using WorkOS token directly
+            value=access_token,
             httponly=True,
-            secure=True,
+            secure=False,  # Set to True in production with HTTPS
             samesite="lax",
-            max_age=30 * 60  # 30 minutes
+            max_age=30 * 60,  # 30 minutes
+            path="/",
+            domain=None  # Let browser use the current domain
         )
         
         # Log activity
@@ -130,7 +142,7 @@ async def callback(payload: dict = Body(...), response: Response = None, db: Ses
 
 
 @router.post("/auth/logout")
-async def logout(response: Response, request: Request, db: Session = Depends(get_db)):
+async def logout(request: Request, db: Session = Depends(get_db)):
     """
     Handles user logout by:
     1. Validating the WorkOS token
@@ -138,12 +150,17 @@ async def logout(response: Response, request: Request, db: Session = Depends(get
     3. Getting the WorkOS logout URL
     4. Clearing the session cookie
     """
-    print("--- LOGOUT ENDPOINT HIT ---") # DEBUG LINE
     try:
         # Get the WorkOS access token from the cookie
         access_token = request.cookies.get("session_token")
         if not access_token:
-            raise HTTPException(status_code=401, detail="Not authenticated")
+            # If no token, still return success to clear any invalid sessions
+            response = JSONResponse(
+                content={"message": "Logged out successfully"},
+                status_code=200
+            )
+            _clear_session_cookie(response)
+            return response
 
         # Validate the WorkOS token and extract claims
         try:
@@ -153,29 +170,55 @@ async def logout(response: Response, request: Request, db: Session = Depends(get
             if not session_id:
                 raise ValueError("No session ID in token")
         except Exception as e:
-            raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
-
-        # Get the WorkOS logout URL
-        logout_url = f"https://api.workos.com/user_management/sessions/logout?session_id={session_id}"
+            # If token is invalid, still clear the cookie but don't try to log out of WorkOS
+            response = JSONResponse(
+                content={"message": "Logged out successfully"},
+                status_code=200
+            )
+            _clear_session_cookie(response)
+            return response
 
         # Invalidate the session in our database
-        crud.invalidate_session(db, session_id)
+        if session_id:
+            crud.invalidate_session(db, session_id)
         
         # Log activity if we have a user ID
         if user_id:
-            crud.create_activity_log(db, user_id, "logout")
+            try:
+                crud.create_activity_log(db, user_id, "logout")
+            except Exception as log_error:
+                print(f"Error logging activity: {log_error}")
 
-        # Clear the session cookie
-        response.delete_cookie("session_token")
-
-        return JSONResponse(
-            content={"workos_logout_url": logout_url},
+        # Create response with CORS headers
+        response = JSONResponse(
+            content={"message": "Logged out successfully"},
             status_code=200
         )
+        
+        # Clear the session cookie
+        _clear_session_cookie(response)
+        
+        return response
 
     except Exception as e:
-        print(f"--- ERROR IN LOGOUT ENDPOINT (auth.py): {type(e).__name__} - {str(e)} ---") # DEBUG LINE
-        raise HTTPException(status_code=500, detail=f"Internal server error during logout: {str(e)}")
+        print(f"Error in logout endpoint: {e}")
+        response = JSONResponse(
+            content={"error": "An error occurred during logout"},
+            status_code=500
+        )
+        _clear_session_cookie(response)
+        return response
+
+def _clear_session_cookie(response: Response) -> None:
+    """Helper to clear the session cookie with proper attributes"""
+    response.delete_cookie(
+        key="session_token",
+        path="/",
+        domain=None,  # Let browser use the current domain
+        secure=False,  # Set to True in production with HTTPS
+        httponly=True,
+        samesite="lax"
+    )
 
 
 @router.get("/api/auth/me")

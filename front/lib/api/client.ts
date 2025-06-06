@@ -75,10 +75,17 @@ class ApiClient {
   
   /**
    * Initiate the login process
+   * @param redirectUri Optional custom redirect URI to use instead of the default
    * @returns The authorization URL to redirect to
    */
-  async initiateLogin(): Promise<ApiResult<LoginInitiationResponse>> {
-    return this.request<LoginInitiationResponse>('/api/auth/login', {
+  async initiateLogin(redirectUri?: string): Promise<ApiResult<LoginInitiationResponse>> {
+    const url = new URL('/api/auth/login', this.baseUrl);
+    
+    if (redirectUri) {
+      url.searchParams.append('redirect_uri', redirectUri);
+    }
+    
+    return this.request<LoginInitiationResponse>(url.toString(), {
       method: 'GET',
       credentials: 'include'
     });

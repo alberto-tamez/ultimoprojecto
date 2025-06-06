@@ -1,33 +1,41 @@
 // file: middleware.ts
 
 import { authkitMiddleware } from '@workos-inc/authkit-nextjs';
+import { NextResponse } from 'next/server';
+
+// Public paths that don't require authentication
+const publicPaths = [
+  '/',
+  '/login',
+  '/api/auth/callback',
+  '/signed-out',
+  '/_next',
+  '/favicon.ico',
+  '/api/auth/me',
+];
 
 // Configure the authkit middleware
 export default authkitMiddleware({
   middlewareAuth: {
     enabled: true,
-    unauthenticatedPaths: [
-      '/',              // Assuming your homepage should be public. If not, remove this.
-      '/login',         // The login page itself must be public.
-      '/callback',      // The route WorkOS redirects to after login must be public.
-      '/signed-out',    // The page shown after a user logs out.
-    ],
+    unauthenticatedPaths: publicPaths,
   },
-  redirectUri: process.env.WORKOS_REDIRECT_URI,
-  debug: process.env.NODE_ENV !== 'production'
+  // Use the redirect URI from environment variables
+  redirectUri: process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI || 'http://localhost:3000/api/auth/callback',
+  // Enable debug logging in development
+  debug: process.env.NODE_ENV !== 'production',
 });
 
-// The `config` object specifies which paths the middleware should run on.
-// This is a crucial performance and logic optimization.
+// Configure which paths the middleware runs on
 export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api (API routes)
+     * - api/auth (auth routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/auth).*)',
   ],
 };
