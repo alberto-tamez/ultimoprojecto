@@ -4,10 +4,10 @@ from sqlalchemy.orm import Session
 import requests # For making HTTP requests to the AI microservice
 import json
 
-from ..auth import get_current_active_user # Authentication dependency
-from ..database import get_db # Database session dependency
-from ..models import User # User model for type hinting
-from ..config import get_settings # For potential future configuration
+from auth import get_current_active_user # Authentication dependency
+from database import get_db # Database session dependency
+from models import User # User model for type hinting
+from config import get_settings # For potential future configuration
 
 settings = get_settings()
 router = APIRouter()
