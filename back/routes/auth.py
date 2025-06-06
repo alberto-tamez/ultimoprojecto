@@ -102,6 +102,7 @@ async def logout(response: Response, request: Request, db: Session = Depends(get
     2. Getting the WorkOS logout URL
     3. Clearing the session cookie
     """
+    print("--- LOGOUT ENDPOINT HIT ---") # DEBUG LINE
     try:
         # Get the session token from the cookie
         session_token = request.cookies.get("session_token")
@@ -140,7 +141,10 @@ async def logout(response: Response, request: Request, db: Session = Depends(get
         )
 
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"--- ERROR IN LOGOUT ENDPOINT (auth.py): {type(e).__name__} - {str(e)} ---") # DEBUG LINE
+        # import traceback
+        # print(traceback.format_exc()) # Uncomment for full traceback if needed
+        raise HTTPException(status_code=500, detail=f"Internal server error during logout: {str(e)}")
 
 
 @router.get("/api/auth/me")

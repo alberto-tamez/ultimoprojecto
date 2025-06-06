@@ -31,7 +31,9 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResult<T>> {
-    const url = `${this.baseUrl}${endpoint}`;
+    // Ensure the endpoint starts with a slash if it doesn't have one
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${this.baseUrl}${normalizedEndpoint}`;
     
     try {
       const response = await fetch(url, {
