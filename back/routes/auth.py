@@ -196,7 +196,7 @@ async def logout(request: Request, db: Session = Depends(get_db)):
         except HTTPException as http_exc: # Specifically catch HTTPException from validate_workos_token
             print(f"Logout: Token validation failed (likely expired or invalid): {http_exc.detail}. Proceeding to clear cookie.")
             # Don't re-raise, just proceed to clear cookie. Message indicates backend part might not have found specific session.
-            response.body = json.dumps({"message": "Backend logout: Token invalid, clearing cookie."}).encode('utf--8')
+            response.body = json.dumps({"message": "Backend logout: Token invalid, clearing cookie."}).encode('utf-8')
         except Exception as e:
             # Other unexpected errors during token validation or session invalidation
             print(f"Error during backend session invalidation: {e}")
