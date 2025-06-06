@@ -35,11 +35,21 @@ export default function MainPage() {
   const handleSignOut = async () => {
     try {
       const result = await apiClient.logout();
-      window.location.href = result.workos_logout_url;
+      console.log('Logout result from API:', result); // Log the actual result
+
+      if (result && typeof result.workos_logout_url === 'string' && result.workos_logout_url) {
+        window.location.href = result.workos_logout_url;
+      } else {
+        console.warn('WorkOS logout URL not found or invalid, redirecting to /login. Received URL:', result?.workos_logout_url);
+        window.location.href = '/login'; // Fallback redirect
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to sign out';
-      console.error('Sign out error:', errorMessage);
+      // Log the full error object for more details, especially if it's not a standard Error instance
+      console.error('Sign out error:', errorMessage, err); 
       setSignOutError(errorMessage);
+      // Optionally, you could also redirect to /login here if preferred
+      // window.location.href = '/login'; 
     }
   };
 

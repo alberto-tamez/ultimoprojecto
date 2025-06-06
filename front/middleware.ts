@@ -4,14 +4,15 @@ import { authkitMiddleware } from '@workos-inc/authkit-nextjs';
 import { NextResponse } from 'next/server';
 
 // Public paths that don't require authentication
+// Public paths that don't require authentication
+// The /callback path is handled by AuthKit and should not be public here.
 const publicPaths = [
-  '/',
+  // '/' was removed, making the root path protected by middleware
   '/login',
-  '/api/auth/callback',
   '/signed-out',
   '/_next',
   '/favicon.ico',
-  '/api/auth/me',
+  '/api/auth/me', // If this is a public endpoint to check session status
 ];
 
 // Configure the authkit middleware
@@ -21,7 +22,9 @@ export default authkitMiddleware({
     unauthenticatedPaths: publicPaths,
   },
   // Use the redirect URI from environment variables
-  redirectUri: process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI || 'http://localhost:3000/api/auth/callback',
+  // This MUST match the WORKOS_REDIRECT_URI in your WorkOS dashboard and backend .env
+  // And should point to your frontend's AuthKit callback handler (e.g., app/callback/route.ts)
+  redirectUri: process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI || 'http://localhost:3000/callback',
   // Enable debug logging in development
   debug: process.env.NODE_ENV !== 'production',
 });
@@ -36,6 +39,16 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    '/((?!_next/static|_next/image|favicon.ico|api/auth).*)',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - api/auth (WorkOS AuthKit's internal API routes, if they exist and are used by AuthKit directly)
+     * - callback (The AuthKit callback route itself, which is handled by AuthKit)
+     * We want the middleware to run on most paths to protect them, but not on these specific exceptions.
+     * The `authkitMiddleware` itself will handle the /callback route appropriately.
+     */
+    '/((?!_next/static|_next/image|favicon.ico|api/auth/|callback).*)',
   ],
 };

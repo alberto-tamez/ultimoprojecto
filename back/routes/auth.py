@@ -181,6 +181,21 @@ async def logout(request: Request, db: Session = Depends(get_db)):
         # Invalidate the session in our database
         if session_id:
             crud.invalidate_session(db, session_id)
+            # Invalidate the WorkOS session remotely
+            try:
+                workos_api_key = settings.WORKOS_API_KEY
+                headers = {
+                    "Authorization": f"Bearer {workos_api_key}",
+                    "Content-Type": "application/json"
+                }
+                requests.post(
+                    "https://api.workos.com/user_management/logout",
+                    headers=headers,
+                    json={"session_id": session_id},
+                    timeout=5
+                )
+            except Exception as workos_logout_error:
+                print(f"WorkOS remote logout failed: {workos_logout_error}")
         
         # Log activity if we have a user ID
         if user_id:

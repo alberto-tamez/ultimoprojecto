@@ -1,7 +1,8 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getSignInUrl } from '@workos-inc/authkit-nextjs';
 
 /**
  * Login page component that handles authentication with WorkOS
@@ -19,17 +20,16 @@ export default function LoginPage() {
    * Handle the sign-in button click
    * Redirects to the WorkOS login endpoint
    */
-  const handleSignIn = (): void => {
+  const handleSignIn = async (): Promise<void> => {
     try {
       setIsLoading(true);
       setError(null);
-      
-      // Get the return URL from query params or default to '/'
-      const returnTo = searchParams.get('returnTo') || '/';
-      
-      // Encode the return URL and redirect to WorkOS login
-      const loginUrl = `/api/auth/login?return_to=${encodeURIComponent(returnTo)}`;
-      window.location.href = loginUrl;
+      // Always use the correct callback URI registered in WorkOS dashboard
+      const redirectUri = process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI || 'http://localhost:3000/callback';
+      const signInUrl = await getSignInUrl({
+        redirectUri,
+      });
+      window.location.href = signInUrl;
     } catch (err) {
       console.error('Sign in error:', err);
       setError('Failed to start sign in process. Please try again.');

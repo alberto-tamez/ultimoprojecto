@@ -33,6 +33,23 @@ export function SignOutButton({
     }
 
     try {
+      // Call backend logout endpoint to clear session and cookie
+      const res = await fetch('/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to sign out.');
+      }
+
+      // Redirect only after backend confirms logout
+      window.location.href = finalSignedOutUrl;
+      return;
+    
       // Call the logout API route.
       // The `fetch` with `redirect: 'follow'` should mean the browser
       // follows all redirects issued by the server (including from WorkOS).

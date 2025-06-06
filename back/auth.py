@@ -58,7 +58,7 @@ def validate_workos_token(token: str) -> Dict[str, Any]:
 from fastapi import Response, Body
 
 def get_session_id_from_cookie(request: Request) -> str:
-    session_id = request.cookies.get("app_session_id")  # Use new cookie name
+    session_id = request.cookies.get("session_token")  # Unified cookie name
     if not session_id:
         raise HTTPException(status_code=401, detail="Not authenticated: No session cookie.")
     return session_id
