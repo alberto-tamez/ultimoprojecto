@@ -10,12 +10,15 @@ from datetime import datetime, timedelta
 from database import get_db
 from config import get_settings
 
-router = APIRouter()
+# Initialize WorkOS client
 settings = get_settings()
-
-# Initialize WorkOS
 workos.api_key = settings.WORKOS_API_KEY
-workos.base_api_url = "https://api.workos.com"
+workos.client_id = settings.WORKOS_CLIENT_ID
+workos.redirect_uri = settings.WORKOS_REDIRECT_URI
+
+router = APIRouter()
+
+# Remove the startup event handler since we're initializing WorkOS at the module level
 
 @router.get("/api/auth/login")
 async def login():
@@ -23,6 +26,7 @@ async def login():
     Initiate the login process with WorkOS.
     Returns the authorization URL to redirect the user to WorkOS for authentication.
     """
+    settings = get_settings()
     authorization_url = workos.client.sso.get_authorization_url(
         client_id=settings.WORKOS_CLIENT_ID,
         redirect_uri=settings.WORKOS_REDIRECT_URI,
@@ -114,7 +118,7 @@ async def logout(response: Response, request: Request, db: Session = Depends(get
             raise HTTPException(status_code=401, detail=str(e))
 
         # Get the WorkOS logout URL
-        logout_url = f"https://api.workos.com/user_management/sessions/logout?session_id={session_id}"
+        logout_url = f"https://{settings.WORKOS_AUTH_DOMAIN}/user_management/sessions/logout?session_id={session_id}"
 
         # Invalidate the session in our database
         crud.invalidate_session(db, session_id)
