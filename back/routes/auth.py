@@ -23,68 +23,73 @@ router = APIRouter()
 @router.get("/api/auth/login")
 async def login():
     """
-    Initiate the login process with WorkOS.
     Returns the authorization URL to redirect the user to WorkOS for authentication.
+    
+    The frontend will redirect to this URL, WorkOS will authenticate the user,
+    and then redirect back to the frontend's callback URL (localhost:3000/callback).
+    The frontend will then handle the callback and make API calls to the backend.
     """
     settings = get_settings()
     authorization_url = workos.client.sso.get_authorization_url(
         client_id=settings.WORKOS_CLIENT_ID,
-        redirect_uri=settings.WORKOS_REDIRECT_URI,
+        redirect_uri=settings.WORKOS_REDIRECT_URI,  # This should be localhost:3000/callback
         state=json.dumps({"provider": "Google"}),  # Or make this configurable
     )
-    
     return {"authorization_url": authorization_url}
 
-@router.get("/api/auth/callback")
-async def callback(code: str, request: Request, db: Session = Depends(get_db)):
-    """
-    [DEPRECATED] Use POST /api/auth/callback instead. This endpoint is kept for backward compatibility.
-    """
-
-
 @router.post("/api/auth/callback")
-async def post_callback(
-    payload: dict = Body(...),
-    response: Response = None,
-    db: Session = Depends(get_db)
-):
+async def callback(payload: dict = Body(...), response: Response = None, db: Session = Depends(get_db)):
     """
     Handles the callback from WorkOS after authentication, exchanges code for tokens, provisions user, sets session cookie.
     """
-    # Extract code from payload
-    code = payload.get("code")
-    
-    if not code:
-        raise HTTPException(status_code=400, detail="Missing code parameter")
-
     try:
+        # Extract code from payload
+        code = payload.get("code")
+        
+        if not code:
+            raise HTTPException(status_code=400, detail="Missing code parameter")
+
         # Exchange code for tokens
-        tokens = workos.client.sso.get_connection_tokens(
+        tokens = workos.client.user_management.get_connection_tokens(
             code=code,
             redirect_uri=settings.WORKOS_REDIRECT_URI,
         )
 
-        # Create or update user
-        user = await crud.get_or_create_user(db, tokens)
+        # Get user info from WorkOS
+        workos_user = workos.client.user_management.get_user(tokens.user_id)
+        
+        # Create or update user in our database
+        db_user = crud.create_or_update_user(db, workos_user)
+        
+        # Create a new app session
+        crud.create_app_session(db, db_user.id, tokens)
         
         # Create JWT access token
         access_token = create_access_token(
-            data={"sub": user.id, "sid": tokens.session.id},
-            expires_delta=timedelta(hours=8)  # Match the frontend cookie duration
+            data={
+                "sub": str(db_user.id),
+                "sid": tokens.session_id,
+                "workos_user_id": tokens.user_id,
+                "email": workos_user.email
+            },
+            expires_delta=timedelta(minutes=30)
         )
-
-        # Set the session cookie
+        
+        # Set secure HTTP-only cookie
+        response = JSONResponse(content={"message": "Login successful"})
         response.set_cookie(
             key="session_token",
             value=access_token,
             httponly=True,
-            secure=not settings.DEBUG,
+            secure=True,
             samesite="lax",
-            max_age=60 * 60 * 8,  # 8 hours
+            max_age=30 * 60  # 30 minutes
         )
-
-        return {"user": user, "session_token": access_token}
-
+        
+        # Log activity
+        crud.create_activity_log(db, db_user.id, "login")
+        
+        return response
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
