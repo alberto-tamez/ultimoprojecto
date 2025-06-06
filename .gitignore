@@ -4,3 +4,5 @@ back/venv
 back/__pycache__
 back/routes/__pycache__
 back/.env
+back/tests/__pycache__
+back/routes/__pycache__
