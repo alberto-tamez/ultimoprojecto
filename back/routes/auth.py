@@ -150,73 +150,45 @@ async def logout(request: Request, db: Session = Depends(get_db)):
     3. Clearing the 'session_token' cookie.
     The frontend (AuthKit's signOut) handles WorkOS session termination and redirection.
     """
-    response = JSONResponse(
-        content={"message": "Backend logout process initiated."},
-        status_code=200
-    )
+    response_content = {"message": "Backend logout process initiated."}
+    status_code = 200
 
     session_token_from_cookie = request.cookies.get("session_token")
 
     if session_token_from_cookie:
-        # The 'session_token' cookie from our backend might store our internal session ID
-        # or it might be the WorkOS access_token if that's how it was set during login.
-        # For this refined flow, we assume 'session_token' is primarily for the backend's own session management.
-        # If it was storing a WorkOS session_id (sid from token), we'd use that to invalidate.
-        # Let's assume for now it's an internal session_id or a WorkOS access_token from which we can derive user/session.
-
-        # Option 1: If 'session_token' IS a WorkOS access_token and you need to extract 'sid' to invalidate
-        # This part is removed as AuthKit is now the primary driver for WorkOS session invalidation.
-        # We only care about invalidating our *backend's* record of the session.
-        
-        # If your crud.invalidate_session expects a WorkOS session_id (sid) that was previously
-        # stored and linked to your app's session, you'd need to retrieve that first.
-        # However, the simplest approach is to invalidate based on the cookie value itself if it's a unique session key for your backend.
-        
-        # For now, let's assume crud.invalidate_session can take the raw cookie value if it's a direct session key,
-        # or that we need a step here to look up the associated WorkOS sid if crud.invalidate_session requires it.
-        # Given the previous code used payload.get("sid"), let's assume 'session_token' is the WorkOS access_token.
-        
         user_id_for_logging = None
         try:
-            # Attempt to validate token to get session_id (sid) for invalidation and user_id for logging
-            # This step is only to find *which* session to invalidate in *our* DB.
-            # It does NOT block logout if token is already expired or invalid, as we still want to clear the cookie.
-            payload = validate_workos_token(session_token_from_cookie) # This might fail if token is invalid/expired
-            workos_session_id = payload.get("sid") # This is the WorkOS session ID
+            payload = validate_workos_token(session_token_from_cookie)
+            workos_session_id = payload.get("sid")
             user_id_for_logging = payload.get("sub")
 
             if workos_session_id:
-                crud.invalidate_session(db, workos_session_id) # Assumes crud.invalidate_session uses WorkOS sid
-                response.body = json.dumps({"message": "Backend session invalidated."}).encode('utf-8')
+                crud.invalidate_session(db, workos_session_id)
+                response_content = {"message": "Backend session invalidated."}
             else:
-                # No 'sid' in token, but token was valid. This is unusual.
                 print("Logout: Valid token but no 'sid' found.")
-                response.body = json.dumps({"message": "Backend logout: No session ID in token to invalidate."}).encode('utf-8')
+                response_content = {"message": "Backend logout: No session ID in token to invalidate."}
 
-        except HTTPException as http_exc: # Specifically catch HTTPException from validate_workos_token
+        except HTTPException as http_exc:
             print(f"Logout: Token validation failed (likely expired or invalid): {http_exc.detail}. Proceeding to clear cookie.")
-            # Don't re-raise, just proceed to clear cookie. Message indicates backend part might not have found specific session.
-            response.body = json.dumps({"message": "Backend logout: Token invalid, clearing cookie."}).encode('utf-8')
+            response_content = {"message": "Backend logout: Token invalid, clearing cookie."}
+            # status_code remains 200 as the primary action is to clear the cookie
         except Exception as e:
-            # Other unexpected errors during token validation or session invalidation
             print(f"Error during backend session invalidation: {e}")
-            # Still proceed to clear cookie. Update response message.
-            response.body = json.dumps({"message": f"Backend logout: Error invalidating session - {str(e)}"}).encode('utf-8')
-            response.status_code = 500 # Indicate an internal error occurred
+            response_content = {"message": f"Backend logout: Error invalidating session - {str(e)}"}
+            status_code = 500
 
-        # Log activity if user_id was found
         if user_id_for_logging:
             try:
                 crud.create_activity_log(db, user_id_for_logging, "logout_backend_part")
             except Exception as log_error:
                 print(f"Error logging backend logout activity: {log_error}")
     else:
-        # No session_token cookie found
-        response.body = json.dumps({"message": "Backend logout: No session cookie found."}).encode('utf-8')
+        response_content = {"message": "Backend logout: No session cookie found."}
 
-    # Always clear the backend's session_token cookie
-    _clear_session_cookie(response)
-    return response
+    final_response = JSONResponse(content=response_content, status_code=status_code)
+    _clear_session_cookie(final_response)
+    return final_response
 
 def _clear_session_cookie(response: Response) -> None:
     """Helper to clear the session cookie with proper attributes"""
