@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
+import { signOut } from '@workos-inc/authkit-nextjs';
 
 interface SignOutButtonProps {
   className?: string;
@@ -21,55 +22,43 @@ export function SignOutButton({
     e.preventDefault();
     setIsLoading(true);
 
-    const appUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL;
-    const finalSignedOutUrl = appUrlFromEnv 
-      ? `${appUrlFromEnv}/signed-out` 
-      : '/signed-out';
-
-    if (!appUrlFromEnv) {
-        console.warn(
-        'NEXT_PUBLIC_APP_URL is not set. Sign-out redirect will be relative, which might be incorrect on deployed environments.'
-        );
-    }
-
     try {
-      // Call backend logout endpoint to clear session and cookie
-      const res = await fetch('/auth/logout', {
+      // Step 1: Call backend logout endpoint to clear its session and cookie
+      const backendRes = await fetch('/auth/logout', {
         method: 'POST',
-        credentials: 'include',
+        credentials: 'include', // Important to send cookies
         headers: {
           'Content-Type': 'application/json',
         },
       });
 
-      if (!res.ok) {
-        throw new Error('Failed to sign out.');
+      if (!backendRes.ok) {
+        // Log the error but proceed to AuthKit logout to ensure frontend session is cleared
+        console.error('Backend sign out failed. Status:', backendRes.status, 'Response:', await backendRes.text());
+        // Depending on policy, you might throw an error or just log and continue.
+        // For robustness in logout, we'll attempt AuthKit logout regardless in the next step.
       }
 
-      // Redirect only after backend confirms logout
-      window.location.href = finalSignedOutUrl;
-      return;
-    
-      // Call the logout API route.
-      // The `fetch` with `redirect: 'follow'` should mean the browser
-      // follows all redirects issued by the server (including from WorkOS).
-      await fetch('/api/auth/logout', { 
-        method: 'GET',
-        redirect: 'follow'
-      });
-      
-      // After the fetch, the browser should have been redirected to the
-      // final URL (e.g., `${appUrlFromEnv}/signed-out`).
-      // We explicitly navigate to the correctly constructed `finalSignedOutUrl`
-      // if not already there, to ensure the correct domain.
-      if (window.location.href !== finalSignedOutUrl) {
-        window.location.href = finalSignedOutUrl;
-      }
+      // Step 2: Call AuthKit's signOut to clear frontend session and handle redirection.
+      // AuthKit's signOut will typically redirect to the configured sign-out page
+      // or through WorkOS global logout, then to your app's signed-out page.
+      await signOut(); 
+      // No explicit window.location.href needed here; signOut handles page navigation.
+
     } catch (error) {
-      console.error('Error during sign out:', error);
-      // On error, also redirect to the final signed-out URL.
-      window.location.href = finalSignedOutUrl;
+      console.error('Error during sign out process:', error);
+      // If AuthKit's signOut itself fails or if there was a critical error before it,
+      // this block will catch it. You might want a fallback redirect here if signOut
+      // doesn't navigate on its own error, though typically it should.
+      // Example fallback (consider if AuthKit's default redirect isn't working):
+      // const appUrlFromEnv = process.env.NEXT_PUBLIC_APP_URL;
+      // const finalSignedOutUrl = appUrlFromEnv 
+      //   ? `${appUrlFromEnv}/signed-out` 
+      //   : '/signed-out';
+      // window.location.href = finalSignedOutUrl;
     } finally {
+      // Since signOut() causes navigation, this part might not execute if successful.
+      // If signOut can error without navigating, then it's useful to reset loading state.
       setIsLoading(false);
     }
   };
