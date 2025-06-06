@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { signOut } from '@workos-inc/authkit-nextjs';
 import { useAuth } from '@workos-inc/authkit-nextjs/components';
 import { useUser } from "@/lib/hooks/useUser";
 import { apiClient } from "@/lib/api/client";
 import { Navigation, type NavigationUser } from '@/components/navigation';
 import { Dashboard } from '@/components/dashboard';
+import { ErrorMessage } from '@/components/error-message';
+import { UserProfile } from '@/components/user-profile';
 
 /**
  * Main application page that handles authentication and routing
@@ -17,11 +19,17 @@ export default function MainPage() {
   const { user: authUser, loading: authLoading } = useAuth({ ensureSignedIn: true });
   
   // User data from our API
-  const { user, loading: userLoading, error: userError, refreshUser } = useUser();
+  const { user, loading: userLoading, error: userHookError, refreshUser } = useUser();
   
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'profile'>('dashboard');
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [error, setError] = useState<string | { message: string } | null>(null);
+
+  // Memoize the transformed navigation user to prevent unnecessary re-renders
+  const navigationUser: NavigationUser | null = useMemo(() => 
+    user ? { ...user, role: user.is_admin ? 'admin' : 'user' } : null,
+    [user]
+  );
 
   // Handle sign out with error handling
   const handleSignOut = async () => {
@@ -54,16 +62,15 @@ export default function MainPage() {
   }
 
   // Handle errors
-  if (error) {
+  if (userHookError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
         <div className="max-w-md w-full bg-white p-6 rounded-lg shadow-md">
           <h2 className="text-xl font-semibold text-red-600 mb-4">Error Loading Data</h2>
-          <p className="text-gray-700 mb-4">
-            We couldn't load your data.
-            {typeof error === 'string' && ` ${error}`}
-            {typeof error === 'object' && error && 'message' in error && ` ${error.message}`}
-          </p>
+          <div className="text-gray-700 mb-4">
+            <p>We couldn't load your data.</p>
+            <ErrorMessage error={userHookError} className="text-gray-700" />
+          </div>
           <button
             onClick={refreshUser}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
@@ -83,14 +90,6 @@ export default function MainPage() {
     );
   }
 
-  // Prepare the user object for the Navigation component
-  const navigationUser: NavigationUser | null = user
-    ? {
-        ...user,
-        role: user.is_admin ? 'admin' : 'user',
-      }
-    : null;
-
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       {navigationUser && (
@@ -107,22 +106,12 @@ export default function MainPage() {
           <div className="text-center p-10 bg-white rounded-lg shadow">
             <h2 className="text-2xl font-semibold">Profile Page</h2>
             <p className="text-gray-600">This is where user profile information will be displayed.</p>
-            {error && typeof error === 'string' && (
-  <div className="text-red-600 text-sm mt-2">{error}</div>
-)}
-{error && typeof error === 'object' && 'message' in error && (
-  <div className="text-red-600 text-sm mt-2">{error.message}</div>
-)}
-            {user && (
-              <div className="mt-4 text-left text-sm text-gray-700">
-                <p><strong>ID:</strong> {user.id}</p>
-                <p><strong>WorkOS User ID:</strong> {user.workos_user_id}</p>
-                <p><strong>Email:</strong> {user.email}</p>
-                <p><strong>Name:</strong> {user.full_name}</p>
-                <p><strong>Admin:</strong> {user.is_admin ? 'Yes' : 'No'}</p>
-                {/* Add other user details as needed */}
-              </div>
-            )}
+            
+            {/* Display any errors */}
+            <ErrorMessage error={error} className="my-4" />
+            
+            {/* Display user profile if available */}
+            {user && <UserProfile user={user} />}
           </div>
         )}
       </main>
