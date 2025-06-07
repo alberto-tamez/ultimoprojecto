@@ -47,47 +47,29 @@ const formatNumber = (value: number, precision: number = 2): string => {
 
 // Pure function component for displaying crop recommendation
 export function CropRecommendationCard({ data }: { data: CropData }) {
-  // State for modal visibility using immutable state pattern
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
-  
+
   // Destructure data using immutable approach
   const { N, P, K, temperature, humidity, ph, rainfall, prediction = 0, label: providedLabel } = data
   
   // Pure transformations using composition of pure functions
-  const confidenceClass = getConfidenceColor(prediction)
-  const formattedPrediction = formatNumber(prediction * 100)
+  const confidenceClass = "bg-green-50 border-green-200";
   // Convert the prediction to a crop label, ensuring type safety
   const cropLabel = (providedLabel as CropLabel) || getCropLabelFromPrediction(prediction)
   const cropDescription = getCropDescription(cropLabel)
   const recommendedConditions = getRecommendedConditions(cropLabel)
-  const badgeVariant = getConfidenceBadgeVariant(prediction)
   
-  // Pure function to handle modal open
-  const handleOpenModal = () => setIsModalOpen(true)
-  
-  // Pure function to handle modal close
-  const handleCloseModal = () => setIsModalOpen(false)
-  
+
   return (
     <>
       <Card 
-        className={`overflow-hidden border-2 ${confidenceClass} cursor-pointer hover:shadow-md transition-shadow`}
-        onClick={handleOpenModal}
+        className={`overflow-hidden border-2 ${confidenceClass}`}
       >
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
           <CardTitle className="text-lg font-bold capitalize">{cropLabel}</CardTitle>
-          <Badge variant={badgeVariant}>
-            {formattedPrediction}% Match
-          </Badge>
         </div>
-        <CardDescription className="line-clamp-2">
-          {cropDescription}
-        </CardDescription>
-        <div className="text-xs text-blue-600 flex items-center gap-1 mt-1">
-          <ExternalLink className="h-3 w-3" />
-          <span>Click for details</span>
-        </div>
+
+
       </CardHeader>
       
       <CardContent className="pb-2">
@@ -154,41 +136,10 @@ export function CropRecommendationCard({ data }: { data: CropData }) {
         </div>
       </CardContent>
       
-      <CardFooter className="pt-2">
-        <div className="w-full text-xs">
-          <div className="flex items-center gap-1 mb-1">
-            <Info className="h-3 w-3 text-muted-foreground" />
-            <span className="text-muted-foreground">Recommended conditions:</span>
-          </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">N:</span>
-              <span className="font-medium">{recommendedConditions.N} kg/ha</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">P:</span>
-              <span className="font-medium">{recommendedConditions.P} kg/ha</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">K:</span>
-              <span className="font-medium">{recommendedConditions.K} kg/ha</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">pH:</span>
-              <span className="font-medium">{recommendedConditions.ph}</span>
-            </div>
-          </div>
-        </div>
-      </CardFooter>
+
     </Card>
     
-    {/* Modal with detailed crop information */}
-    <CropDetailModal 
-      isOpen={isModalOpen}
-      onClose={handleCloseModal}
-      cropData={data}
-      cropLabel={cropLabel}
-    />
+
     </>
   )
 }

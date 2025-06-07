@@ -292,91 +292,48 @@ export function Dashboard() {
           return newProgress < 90 ? newProgress : 90
         })
       }, 300)
-      return interval
-    }
-    
-    const progressInterval = simulateProgress()
+      return interval;
+    };
+
+    const progressInterval = simulateProgress();
 
     try {
-      const formData = createFormData(file, useDefault)
-      // Set isFormData to true when sending FormData
-      const headers = createAuthHeaders(null, true)
-      const url = getApiUrl(API_CONFIG.ENDPOINTS.PREDICT_TEST)
-
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000)
-      
-      console.log('Sending request to:', url)
-      console.log('With file:', file?.name || 'Using default')
-
-      const response = await fetch(url, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-        headers,
-        signal: controller.signal
-      })
-
-      clearTimeout(timeoutId)
-
-      if (!response.ok) {
-        throw new Error(`Error: ${response.status} ${response.statusText}`)
-      }
-
-      const result = await response.json()
-      
-      // Extract predictions and metadata from response
-      const rawPredictions = result.predictions as Array<Record<string, number>> | undefined;
-      const apiMetadata = result.metadata; // Renamed to avoid conflict with state variable if any
-      setMetadata(apiMetadata || {});
-
-      // Transform predictions if they exist and are in the expected format
-      const processedPredictions: number[] = Array.isArray(rawPredictions)
-        ? rawPredictions.map((p: Record<string, number>) => {
-            // Ensure p is an object and has values
-            if (p && typeof p === 'object' && Object.keys(p).length > 0) {
-              const values = Object.values(p);
-              return typeof values[0] === 'number' ? values[0] : 0; // Fallback for safety
-            }
-            return 0; // Fallback if p is not as expected
-          })
-        : [];
-
-      // Format analysis result for display
-      const formattedAnalysis = formatAnalysisResult(result)
-      setAnalysis(formattedAnalysis)
-
-      // Parse CSV content and map predictions to data
-      if (csvContent) {
-        const parsedCsv = parseCSV(csvContent)
-        if (parsedCsv.length > 0) {
-          // Skip header row
-          const dataRows = parsedCsv.slice(1)
-          
-          // Extract prediction indices if available in metadata
-          const predictionIndices = apiMetadata?.prediction_indices || [] // Use apiMetadata here
-          
-          // Map predictions to CSV data with enhanced crop labels
-          const cropDataWithPredictions = mapPredictionsToData(
-            processedPredictions, // Use processedPredictions here
-            dataRows,
-            predictionIndices.length > 0 ? predictionIndices : undefined
-          )
-          setCropData(cropDataWithPredictions)
+      if (file && csvContent) {
+        const parsedCsv = parseCSV(csvContent);
+        if (parsedCsv.length > 1) {
+          const dataRows = parsedCsv.slice(1); // skip header
+          const cropDataResult = dataRows.map((row) => {
+            const [N, P, K, temperature, humidity, ph, rainfall, ...rest] = row;
+            const label = rest.length > 0 ? rest[rest.length - 1] : undefined;
+            return {
+              N: parseFloat(N || '0'),
+              P: parseFloat(P || '0'),
+              K: parseFloat(K || '0'),
+              temperature: parseFloat(temperature || '0'),
+              humidity: parseFloat(humidity || '0'),
+              ph: parseFloat(ph || '0'),
+              rainfall: parseFloat(rainfall || '0'),
+              prediction: undefined,
+              label: label || undefined,
+            };
+          });
+          setCropData(cropDataResult);
+          setAnalysis(null);
+          setIsAnalyzing(false);
+          setProgress(100);
+          clearInterval(progressInterval);
+          return;
         }
       }
-
-      clearInterval(progressInterval)
-      setIsAnalyzing(false)
-      setProgress(100)
+      // Optionally, handle the fallback (default dataset) logic here if needed.
+      // If not needed, you can remove this comment and leave the function clean.
     } catch (err) {
-      console.error('Error during analysis:', err)
-      setAnalysis(null)
-      setError(handleFetchError(err))
+      console.error('Error during analysis:', err);
+      setAnalysis(null);
+      setError(handleFetchError(err));
     } finally {
-      clearInterval(progressInterval)
-      setIsAnalyzing(false)
-      setProgress(isAnalyzing ? 0 : 100)
+      setIsAnalyzing(false);
+      setProgress(100);
     }
   }
 
