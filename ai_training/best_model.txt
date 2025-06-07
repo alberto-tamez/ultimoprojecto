@@ -1,0 +1,1 @@
+/home/assessment5/Documents/euipobab/ultimoprojecto/ai_training/mlp3_trained.pth
