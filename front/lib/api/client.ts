@@ -92,23 +92,14 @@ class ApiClient {
   }
 
   /**
-   * Get the current authenticated user (MOCK for frontend testing)
-   * In production, this should call the backend endpoint GET /api/auth/me.
+   * Get the current authenticated user from the backend API
+   * Calls the backend endpoint GET /users/me/
    * Output matches MeResponse type.
    */
   async getCurrentUser(): Promise<ApiResult<import('./types').MeResponse>> {
-    // Return dummy user data for frontend-only testing (matches backend contract)
-    return {
-      success: true,
-      data: {
-        id: 'user-123',
-        workos_user_id: 'workos_user_xyz',
-        email: 'user@example.com',
-        full_name: 'User Full Name',
-        is_admin: false,
-        // ...add more fields as needed for your app
-      }
-    };
+    return this.request<import('./types').MeResponse>('/users/me/', {
+      method: 'GET',
+    });
   }
 
   // ===== User Profile Methods =====

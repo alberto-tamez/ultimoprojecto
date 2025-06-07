@@ -21,7 +21,7 @@ type AnalysisResult = {
   details?: string
   recommendations?: string[]
   statistics?: Record<string, string | number>
-  predictions?: number[]
+  predictions?: Array<Record<string, number>>
   metadata?: {
     samples_processed?: number
     features_used?: number
@@ -328,8 +328,21 @@ export function Dashboard() {
       const result = await response.json()
       
       // Extract predictions and metadata from response
-      const { predictions, metadata } = result
-      setMetadata(metadata || {})
+      const rawPredictions = result.predictions as Array<Record<string, number>> | undefined;
+      const apiMetadata = result.metadata; // Renamed to avoid conflict with state variable if any
+      setMetadata(apiMetadata || {});
+
+      // Transform predictions if they exist and are in the expected format
+      const processedPredictions: number[] = Array.isArray(rawPredictions)
+        ? rawPredictions.map((p: Record<string, number>) => {
+            // Ensure p is an object and has values
+            if (p && typeof p === 'object' && Object.keys(p).length > 0) {
+              const values = Object.values(p);
+              return typeof values[0] === 'number' ? values[0] : 0; // Fallback for safety
+            }
+            return 0; // Fallback if p is not as expected
+          })
+        : [];
 
       // Format analysis result for display
       const formattedAnalysis = formatAnalysisResult(result)
@@ -343,11 +356,11 @@ export function Dashboard() {
           const dataRows = parsedCsv.slice(1)
           
           // Extract prediction indices if available in metadata
-          const predictionIndices = metadata?.prediction_indices || []
+          const predictionIndices = apiMetadata?.prediction_indices || [] // Use apiMetadata here
           
           // Map predictions to CSV data with enhanced crop labels
           const cropDataWithPredictions = mapPredictionsToData(
-            predictions, 
+            processedPredictions, // Use processedPredictions here
             dataRows,
             predictionIndices.length > 0 ? predictionIndices : undefined
           )

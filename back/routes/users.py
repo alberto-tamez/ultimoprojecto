@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 import schemas
 import crud
@@ -28,6 +28,7 @@ def get_user_profile(user: models.User) -> dict:
 @router.get("/users/me/", response_model=schemas.UserInDB)
 async def read_users_me(
     request: Request,
+    response: Response, # Added Response
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
