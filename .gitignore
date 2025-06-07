@@ -6,6 +6,9 @@ back/routes/__pycache__
 
 
 
+back/.env
+back/tests/__pycache__
+back/routes/__pycache__
 # Entornos virtuales
 venv/
 ENV/
@@ -28,6 +31,9 @@ _pycache_/
 *.ipynb
 .ipynb_checkpoints/
 
+# Archivos de Jupyter
+*.ipynb
+.ipynb_checkpoints/
 # Archivos del sistema
 .DS_Store
 Thumbs.db

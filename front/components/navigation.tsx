@@ -3,11 +3,17 @@
 import { Button } from "@/components/ui/button"
 import { User, BarChart3, LogOut } from "lucide-react"
 
+import { MeResponse } from '../lib/api/types';
+
+export interface NavigationUser extends MeResponse {
+  role?: string;
+}
+
 interface NavigationProps {
   currentPage: "dashboard" | "profile"
   onPageChange: (page: "dashboard" | "profile") => void
   onLogout: () => void
-  user: { email: string; name: string; role: string } | null
+  user: NavigationUser | null;
 }
 
 export function Navigation({ currentPage, onPageChange, onLogout, user }: NavigationProps) {
@@ -40,7 +46,7 @@ export function Navigation({ currentPage, onPageChange, onLogout, user }: Naviga
           </div>
 
           <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">{user?.name || user?.email}</span>
+            <span className="ml-2 font-medium">{user?.full_name}</span>
             <Button variant="ghost" size="sm" onClick={onLogout} className="flex items-center space-x-2">
               <LogOut className="h-4 w-4" />
               <span>Logout</span>

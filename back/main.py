@@ -1,31 +1,34 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from datetime import timedelta
-import models, schemas, crud, auth
-from database import engine, get_db
+import models
+from database import get_engine
 from config import get_settings
-from routes import login, users, logs, history
+from routes import users, logs, history, auth, ai_service
 
-# Create database tables
+# Get database engine and create tables
+engine = get_engine()
 models.Base.metadata.create_all(bind=engine)
 
 settings = get_settings()
 app = FastAPI()
 
-# CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all origins for development
+    allow_origins=[
+        "http://localhost:3000", # Next.js frontend
+        # Add other origins if needed, e.g., your production frontend URL
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(users.router)
-app.include_router(login.router)
 app.include_router(logs.router)
 app.include_router(history.router)
+app.include_router(auth.router)
+app.include_router(ai_service.router)
 
 # Root endpoint
 @app.get("/")
