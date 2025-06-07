@@ -10,8 +10,8 @@ export interface NavigationUser extends MeResponse {
 }
 
 interface NavigationProps {
-  currentPage: "dashboard" | "profile"
-  onPageChange: (page: "dashboard" | "profile") => void
+  currentPage: "dashboard" | "profile" | "admin"
+  onPageChange: (page: "dashboard" | "profile" | "admin") => void
   onLogout: () => void
   user: NavigationUser | null;
 }
@@ -41,6 +41,15 @@ export function Navigation({ currentPage, onPageChange, onLogout, user }: Naviga
               >
                 <User className="h-4 w-4" />
                 <span>Profile</span>
+              </Button>
+              <Button
+                variant={currentPage === "admin" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => onPageChange("admin")}
+                className="flex items-center space-x-2"
+              >
+                <BarChart3 className="h-4 w-4" />
+                <span>Admin</span>
               </Button>
             </div>
           </div>

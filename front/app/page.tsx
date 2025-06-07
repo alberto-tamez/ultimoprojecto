@@ -9,6 +9,7 @@ import { Navigation, type NavigationUser } from '@/components/navigation';
 import { Dashboard } from '@/components/dashboard';
 import { ErrorMessage } from '@/components/error-message';
 import { UserProfile } from '@/components/user-profile';
+import AdminDashboard from '@/components/admin-dashboard';
 
 /**
  * Main application page that handles authentication and routing
@@ -21,7 +22,7 @@ export default function MainPage() {
   // User data from our API
   const { user, loading: userLoading, error: userHookError, refreshUser } = useUser();
   
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'profile'>('dashboard');
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'profile' | 'admin'>('dashboard');
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [error, setError] = useState<string | { message: string } | null>(null);
 
@@ -53,7 +54,7 @@ export default function MainPage() {
     }
   };
 
-  const handlePageChange = (page: 'dashboard' | 'profile') => {
+  const handlePageChange = (page: 'dashboard' | 'profile' | 'admin') => {
     setCurrentPage(page);
   };
 
@@ -124,6 +125,7 @@ export default function MainPage() {
             {user && <UserProfile user={user} />}
           </div>
         )}
+        {currentPage === 'admin' && <AdminDashboard />}
       </main>
     </div>
   );
