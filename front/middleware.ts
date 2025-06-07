@@ -17,6 +17,8 @@ const publicPaths = [
 
 // Configure the authkit middleware
 export default authkitMiddleware({
+  // Always enable debug logging in development
+  debug: process.env.NODE_ENV !== 'production',
   middlewareAuth: {
     enabled: true,
     unauthenticatedPaths: publicPaths,
@@ -25,8 +27,7 @@ export default authkitMiddleware({
   // This MUST match the WORKOS_REDIRECT_URI in your WorkOS dashboard and backend .env
   // And should point to your frontend's AuthKit callback handler (e.g., app/callback/route.ts)
   redirectUri: process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI,
-  // Enable debug logging in development
-  debug: process.env.NODE_ENV !== 'production',
+
 });
 
 // Configure which paths the middleware runs on
