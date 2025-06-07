@@ -163,12 +163,60 @@ export function Dashboard() {
     }
   }
 
+  // Pure function to create a File object from a path
+  const createFileFromPath = async (path: string, filename: string): Promise<File | null> => {
+    try {
+      const response = await fetch(path)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file: ${response.status}`)
+      }
+      
+      const blob = await response.blob()
+      return new File([blob], filename, { type: 'text/csv' })
+    } catch (err: unknown) {
+      console.error('Error creating file from path:', err)
+      return null
+    }
+  }
+
   // Pure function handler for using default dataset
-  const handleUseDefault = () => {
+  const handleUseDefault = async () => {
     setUseDefault(true)
     setFile(null)
-    setAnalysis(null)
     setError(null)
+    
+    try {
+      // Use the specific crop recommendation dataset from public directory
+      const defaultDatasetPath = '/1Crop_recommendation.csv'
+      const defaultFilename = '1Crop_recommendation.csv'
+      
+      // Create a File object from the dataset
+      const defaultFile = await createFileFromPath(defaultDatasetPath, defaultFilename)
+      
+      if (defaultFile) {
+        // Set the file and read its content
+        setFile(defaultFile)
+        
+        // Read file content using FileReader (pure approach)
+        const reader = new FileReader()
+        reader.onload = (event) => {
+          if (event.target?.result) {
+            const content = event.target.result as string
+            setCsvContent(content)
+            console.log('Default dataset loaded successfully')
+          }
+        }
+        reader.readAsText(defaultFile)
+      } else {
+        throw new Error('Failed to create file from default dataset')
+      }
+    } catch (err: unknown) {
+      console.error('Error loading default dataset:', err)
+      // Handle error with proper type checking
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      setError(`Failed to load default dataset: ${errorMessage}`)
+      setUseDefault(false)
+    }
   }
 
   // Pure function to create FormData object
@@ -185,16 +233,20 @@ export function Dashboard() {
   }
   
   // Pure function to create auth headers using WorkOS AuthKit session
-  const createAuthHeaders = (user: any | null): HeadersInit => {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
+  const createAuthHeaders = (user: any | null, isFormData: boolean = false): HeadersInit => {
+    // Start with minimal headers
+    const headers: HeadersInit = {
+      'Accept': 'application/json',
     }
     
-    // If user is authenticated, add session token from AuthKit
+    // Only set Content-Type if not FormData (browser will set it for FormData)
+    if (!isFormData) {
+      headers['Content-Type'] = 'application/json'
+    }
+    
+    // Add authorization header if user is authenticated
     if (user) {
-      // WorkOS AuthKit handles the token in cookies automatically
-      // We're just ensuring the Content-Type is set correctly
-      // The actual authentication is handled by the credentials: 'include' option
+      headers['Authorization'] = `Bearer ${user.token}`
     }
     
     return headers
@@ -249,11 +301,15 @@ export function Dashboard() {
 
     try {
       const formData = createFormData(file, useDefault)
-      const headers = createAuthHeaders(user)
+      // Set isFormData to true when sending FormData
+      const headers = createAuthHeaders(user, true)
       const url = getApiUrl(API_CONFIG.ENDPOINTS.PREDICT_TEST)
 
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 30000)
+      
+      console.log('Sending request to:', url)
+      console.log('With file:', file?.name || 'Using default')
 
       const response = await fetch(url, {
         method: 'POST',
@@ -352,7 +408,7 @@ export function Dashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="csv-upload">Upload CSV File</Label>
               <Input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} className="cursor-pointer" />
@@ -364,19 +420,18 @@ export function Dashboard() {
               )}
             </div>
 
-            <div className="flex items-end">
+            <div>
               <Button variant="outline" onClick={handleUseDefault} className="w-full" disabled={isAnalyzing}>
                 Use Default Dataset
               </Button>
+              {useDefault && (
+                <p className="text-sm text-green-600 flex items-center space-x-1 mt-2">
+                  <FileText className="h-4 w-4" />
+                  <span>Using crop recommendation dataset</span>
+                </p>
+              )}
             </div>
           </div>
-
-          {useDefault && (
-            <p className="text-sm text-blue-600 flex items-center space-x-1">
-              <FileText className="h-4 w-4" />
-              <span>Using sample sales dataset (1,247 records)</span>
-            </p>
-          )}
 
           {error && (
             <Alert variant="destructive" className="mt-4">
@@ -406,36 +461,26 @@ export function Dashboard() {
         </CardContent>
       </Card>
 
-      {analysis && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Analysis Results</span>
-              <Button variant="outline" size="sm" onClick={handleDownload} className="flex items-center space-x-2">
-                <Download className="h-4 w-4" />
-                <span>Download Report</span>
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="prose max-w-none">
-              <pre className="whitespace-pre-wrap text-sm bg-gray-50 p-4 rounded-lg">{analysis}</pre>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Download button moved to crop recommendations section */}
       
       {cropData.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Crop Recommendations</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>Crop Recommendations</span>
+              {analysis && (
+                <Button variant="outline" size="sm" onClick={handleDownload} className="flex items-center space-x-2">
+                  <Download className="h-4 w-4" />
+                  <span>Download Report</span>
+                </Button>
+              )}
+            </CardTitle>
             <CardDescription>
-              Based on soil nutrients, climate conditions, and our AI model
-              {metadata && ` (${metadata.model_type})`}
+              Based on soil nutrients and climate conditions
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {getPaginatedData(cropData, currentPage, ITEMS_PER_PAGE).map((crop, index) => (
                 <CropRecommendationCard 
                   key={`crop-${currentPage}-${index}`} 
