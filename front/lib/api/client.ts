@@ -16,7 +16,7 @@ class ApiClient {
 
   constructor() {
     // Load from environment variables with fallback for development
-    this.baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+    this.baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
     
     this.defaultHeaders = {
       'Content-Type': 'application/json',

@@ -25,7 +25,7 @@ export default function LoginPage() {
       setIsLoading(true);
       setError(null);
       // Always use the correct callback URI registered in WorkOS dashboard
-      const redirectUri = process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI || 'http://localhost:3000/callback';
+      const redirectUri = process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI;
       const signInUrl = await getSignInUrl({
         redirectUri,
       });

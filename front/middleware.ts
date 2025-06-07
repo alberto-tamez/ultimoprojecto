@@ -24,7 +24,7 @@ export default authkitMiddleware({
   // Use the redirect URI from environment variables
   // This MUST match the WORKOS_REDIRECT_URI in your WorkOS dashboard and backend .env
   // And should point to your frontend's AuthKit callback handler (e.g., app/callback/route.ts)
-  redirectUri: process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI || 'http://localhost:3000/callback',
+  redirectUri: process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI,
   // Enable debug logging in development
   debug: process.env.NODE_ENV !== 'production',
 });
