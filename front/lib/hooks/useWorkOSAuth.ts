@@ -4,15 +4,17 @@ import { apiClient } from '../api/client';
 import { MeResponse, ApiError, ApiResult } from '../api/types';
 
 // Debug logging helper
-const debug = (message: string, ...args: any[]) => {
-  console.log(`[useWorkOSAuth] ${message}`, ...args);
+const debugLog = (message: string, ...args: any[]) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[useWorkOSAuth] ${message}`, ...args);
+  }
 };
 
 // Infer the WorkOSUser type from the useAuth hook's return value for user
-type InferredWorkOSUser = ReturnType<typeof useAuth>['user'];
+type InferredWorkOSUser = ReturnType<typeof useAuth>['user']; // This is User | null | undefined
 
-interface UseWorkOSAuthReturn {
-  workosUser: InferredWorkOSUser;
+export interface UseWorkOSAuthReturn {
+  workosUser: InferredWorkOSUser; // Already handles User | null | undefined
   backendUser: MeResponse | null;
   isLoading: boolean;
   error: Error | null;
@@ -24,115 +26,115 @@ export const useWorkOSAuth = (): UseWorkOSAuthReturn => {
   const { user: authKitUser, signOut } = useAuth();
 
   const [backendUser, setBackendUser] = useState<MeResponse | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true); // Start loading as true
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
 
   // Fetch backend user data
-  const fetchBackendUser = useCallback(async () => {
-    if (!authKitUser) return null;
-    
-    debug('Fetching backend user data');
-    try {
-      const apiResult = await apiClient.getCurrentUser();
-      debug('Backend user data received:', apiResult);
-      return apiResult.success ? apiResult.data : null;
-    } catch (e) {
-      debug('Error fetching backend user:', e);
-      setError(new Error('Failed to fetch user data'));
+  const fetchBackendUser = useCallback(async (currentAuthKitUser: InferredWorkOSUser) => {
+    // Do not fetch if authKitUser is null (logged out) or undefined (resolving)
+    if (!currentAuthKitUser) {
+      debugLog('fetchBackendUser: No AuthKit user (null or undefined), skipping fetch.');
+      // Ensure isLoading is false if we are not fetching because user is null (logged out)
+      // If user is undefined (resolving), useEffect will handle isLoading
+      if (currentAuthKitUser === null) {
+        setIsLoading(false);
+        setBackendUser(null); // Ensure backend user is also null
+        setError(null); // Clear errors
+      }
       return null;
     }
-  }, [authKitUser]);
+
+    debugLog('fetchBackendUser: Fetching backend user data for AuthKit user:', currentAuthKitUser.id);
+    setIsLoading(true); // Set loading true before async operation
+    try {
+      const apiResult = await apiClient.getCurrentUser();
+      debugLog('fetchBackendUser: Backend user data API result:', apiResult);
+      if (apiResult.success) {
+        debugLog('fetchBackendUser: Successfully fetched backend user:', apiResult.data);
+        setError(null); // Clear previous errors on success
+        return apiResult.data;
+      } else {
+        debugLog('fetchBackendUser: Failed to fetch backend user, error:', apiResult.error);
+        setError(new Error(apiResult.error.message || 'Failed to fetch user data from backend'));
+        return null;
+      }
+    } catch (e: any) {
+      debugLog('fetchBackendUser: Exception during fetch:', e);
+      setError(new Error(e.message || 'Exception while fetching user data'));
+      return null;
+    }
+  }, []); // apiClient is stable
 
   useEffect(() => {
     let isMounted = true;
+    debugLog('useEffect [authKitUser]: AuthKit user state changed:', authKitUser);
 
-    // Handles the case where AuthKit is still determining the user state.
-    // workosUserFromAuthKit will be `undefined` initially.
     if (authKitUser === undefined) {
-      if (isMounted && !isLoading) {
-        setIsLoading(true); // Ensure loading is true while AuthKit resolves
-      }
-      return; // Wait for AuthKit to provide a user object or null
+      debugLog('useEffect [authKitUser]: AuthKit user is undefined, still resolving. Setting isLoading to true.');
+      if (isMounted) setIsLoading(true);
+      return; // Wait for AuthKit to resolve
     }
 
-    // AuthKit has resolved. workosUserFromAuthKit is now either a user object or null.
-    if (authKitUser) {
-      // AuthKit has an authenticated user. Attempt to fetch/sync backend user.
-      if (isMounted && !isLoading) {
-        setIsLoading(true);
-      }
-      ApiClient.getCurrentUser()
-        .then((apiResult: ApiResult<MeResponse>) => {
-          if (isMounted) {
-            if (apiResult.success) {
-              // Successfully fetched data
-              if (apiResult.data) {
-                setBackendUser(apiResult.data);
-                setError(null);
-              } else {
-                // This case implies success: true but no data, which might be an unexpected API contract violation.
-                console.error('Backend user fetch error: Successful response but no data.');
-                setError(new Error('Failed to process user data: No data received.'));
-                setBackendUser(null);
-              }
-            } else {
-              // apiResult.success is false, so apiResult.error is guaranteed to exist.
-              const errorMessage = apiResult.error.message || 'Unknown error fetching backend user.';
-              console.error('Backend user fetch error:', errorMessage, apiResult.error.details);
-              setError(new Error(errorMessage));
-              setBackendUser(null);
-            }
-          }
-        })
-        .catch((err: any) => {
-          if (isMounted) {
-            console.error('Exception during backend user fetch:', err);
-            setError(err instanceof Error ? err : new Error('An unexpected error occurred.'));
-            setBackendUser(null);
-          }
-        })
-        .finally(() => {
-          if (isMounted) {
-            setIsLoading(false);
-          }
-        });
-    } else {
-      // No AuthKit user (workosUserFromAuthKit is null), so clear backend user and stop loading.
+    if (authKitUser === null) {
+      debugLog('useEffect [authKitUser]: AuthKit user is null (logged out). Clearing backend user and setting isLoading to false.');
       if (isMounted) {
         setBackendUser(null);
-        setError(null); // Clear any previous errors
+        setError(null);
         setIsLoading(false);
       }
+      return;
     }
+
+    // AuthKit user exists (is an object), try to fetch backend user
+    debugLog('useEffect [authKitUser]: AuthKit user exists, proceeding to fetch/sync backend user.');
+    // Set loading true before starting the fetch operation if not already true
+    if (isMounted && !isLoading) setIsLoading(true);
+
+    fetchBackendUser(authKitUser).then(fetchedUser => {
+      if (isMounted) {
+        setBackendUser(fetchedUser); // This will be null if fetch failed
+        // Error state is handled within fetchBackendUser
+        setIsLoading(false); // Done with operations for this authKitUser state
+      }
+    });
 
     return () => {
+      debugLog('useEffect [authKitUser]: Unmounting or authKitUser changed again.');
       isMounted = false;
     };
-  }, [authKitUser]); // Re-run effect when AuthKit user state changes
+  }, [authKitUser, fetchBackendUser, isLoading]); // Added isLoading to dependencies
 
   const logout = useCallback(async () => {
-    debug('Logging out user');
+    debugLog('logout: Initiating logout.');
     setIsLoading(true);
+    setError(null); // Clear errors on logout attempt
     try {
-      debug('Calling backend logout endpoint');
+      debugLog('logout: Calling backend logout endpoint.');
       await apiClient.logout();
-      debug('Backend logout successful');
-
-      // Clear any local state
-      // Explicitly clear state here for immediate UI feedback.
-      setBackendUser(null);
-      setError(null);
-    } catch (err: any) {
-      console.error('Logout failed:', err);
-      setError(err instanceof Error ? err : new Error('Logout failed'));
+      debugLog('logout: Backend logout successful.');
+    } catch (e: any) {
+      debugLog('logout: Error during backend logout:', e);
+      // Log the error but don't block AuthKit sign out
+      console.error('[useWorkOSAuth] Backend logout failed:', e.message);
     } finally {
-      setIsLoading(false);
-      await signOut();
+      // Always attempt to sign out from AuthKit
+      try {
+        debugLog('logout: Calling AuthKit signOut.');
+        await signOut(); // This will trigger the useEffect to clear states
+        debugLog('logout: AuthKit signOut successful.');
+      } catch (authKitSignOutError: any) {
+        debugLog('logout: Error during AuthKit signOut:', authKitSignOutError);
+        setError(new Error(authKitSignOutError.message || 'AuthKit sign out failed'));
+        setIsLoading(false); // Explicitly set loading false if AuthKit signOut fails
+      }
+      // If signOut is successful, authKitUser becomes null,
+      // and the useEffect will set isLoading to false and clear backendUser.
+      // If signOut fails, we've set isLoading false above.
     }
-  }, [signOut]); // Removed isMounted from deps as it's managed internally
+  }, [signOut]); // apiClient is stable
 
-  // isAuthenticated is true only if both AuthKit and backend confirm user identity.
   const isAuthenticated = !!authKitUser && !!backendUser;
+  debugLog('Render: isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'authKitUser:', authKitUser ? authKitUser.id : authKitUser, 'backendUser:', backendUser ? backendUser.id : backendUser);
 
   return {
     workosUser: authKitUser,
