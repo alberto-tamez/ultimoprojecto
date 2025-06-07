@@ -2,15 +2,18 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { useState, useEffect } from "react"
+import { Button } from "./ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Input } from "./ui/input"
+import { Label } from "./ui/label"
 import { Upload, FileText, Brain, Download, AlertCircle } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
+import { Progress } from "./ui/progress"
 import { useAuth } from "@workos-inc/authkit-nextjs/components"
+import { CropRecommendationCard, CropData } from "./CropRecommendationCard"
+import { getCropLabelFromIndex } from "../lib/crop-utils"
+import { CardPagination } from "./CardPagination"
 
 // Type definitions for better type safety
 type AnalysisResult = {
@@ -18,6 +21,13 @@ type AnalysisResult = {
   details?: string
   recommendations?: string[]
   statistics?: Record<string, string | number>
+  predictions?: number[]
+  metadata?: {
+    samples_processed?: number
+    features_used?: number
+    model_type?: string
+    [key: string]: any
+  }
   [key: string]: any
 }
 
@@ -61,6 +71,60 @@ ${result.statistics ? `### Statistical Summary:\n${Object.entries(result.statist
   return JSON.stringify(result, null, 2)
 }
 
+// Pure constants
+const ITEMS_PER_PAGE = 5
+
+// Pure function to calculate total pages
+const calculateTotalPages = (totalItems: number, itemsPerPage: number): number => {
+  return Math.ceil(totalItems / itemsPerPage)
+}
+
+// Pure function to get paginated data
+const getPaginatedData = <T,>(data: T[], currentPage: number, itemsPerPage: number): T[] => {
+  const startIndex = (currentPage - 1) * itemsPerPage
+  return data.slice(startIndex, startIndex + itemsPerPage)
+}
+
+// Pure function to map predictions to CSV rows with crop labels
+const mapPredictionsToData = (predictions: number[], csvRows: string[][], predictionIndices?: number[]): CropData[] => {
+  return predictions.map((prediction, index) => {
+    // Ensure we have a corresponding CSV row
+    if (index < csvRows.length) {
+      const row = csvRows[index]
+      // Map CSV values to CropData structure with enhanced crop label
+      return {
+        N: parseFloat(row[0] || '0'),
+        P: parseFloat(row[1] || '0'),
+        K: parseFloat(row[2] || '0'),
+        temperature: parseFloat(row[3] || '0'),
+        humidity: parseFloat(row[4] || '0'),
+        ph: parseFloat(row[5] || '0'),
+        rainfall: parseFloat(row[6] || '0'),
+        prediction,
+        // If we have prediction indices (actual crop types), use them to get labels
+        label: predictionIndices && index < predictionIndices.length ? 
+          getCropLabelFromIndex(predictionIndices[index]) : 
+          undefined
+      }
+    }
+    return {
+      N: 0, P: 0, K: 0, temperature: 0, humidity: 0, ph: 0, rainfall: 0, prediction
+    }
+  })
+}
+
+// Pure function to parse CSV content
+const parseCSV = (csvContent: string): string[][] => {
+  const lines = csvContent.trim().split('\n')
+  const parsedCsv: string[][] = []
+  
+  lines.forEach(line => {
+    parsedCsv.push(line.split(','))
+  })
+  
+  return parsedCsv
+}
+
 export function Dashboard() {
   // State management using React hooks
   const { user } = useAuth()
@@ -70,6 +134,10 @@ export function Dashboard() {
   const [analysis, setAnalysis] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
+  const [cropData, setCropData] = useState<CropData[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [metadata, setMetadata] = useState<Record<string, any> | null>(null)
+  const [csvContent, setCsvContent] = useState<string>('')
 
   // Pure function handler for file upload events
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,6 +147,17 @@ export function Dashboard() {
       setUseDefault(false)
       setAnalysis(null)
       setError(null)
+      setCropData([])
+      setCurrentPage(1)
+      
+      // Read file content
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setCsvContent(event.target.result as string)
+        }
+      }
+      reader.readAsText(selectedFile)
     } else {
       alert("Please select a valid CSV file")
     }
@@ -144,41 +223,38 @@ export function Dashboard() {
   
   // Asynchronous function to handle data analysis
   const handleAnalyze = async () => {
-    // Input validation
     if (!file && !useDefault) {
       alert("Please upload a CSV file or use the default dataset")
       return
     }
 
-    // Reset state for new analysis
     setIsAnalyzing(true)
     setError(null)
     setProgress(0)
-    
-    // Create progress update function
-    const updateProgress = (prev: number): number => {
-      const newProgress = prev + Math.random() * 10
-      return newProgress >= 90 ? 90 : newProgress
+    setCropData([])
+    setCurrentPage(1)
+
+    // Progress simulation with pure function
+    const simulateProgress = () => {
+      const interval = setInterval(() => {
+        setProgress(prev => {
+          const newProgress = prev + Math.random() * 10
+          return newProgress < 90 ? newProgress : 90
+        })
+      }, 300)
+      return interval
     }
     
-    // Start progress simulation
-    const progressInterval = setInterval(() => {
-      setProgress(updateProgress)
-    }, 300)
-    
+    const progressInterval = simulateProgress()
+
     try {
-      // Use pure functions to prepare request
       const formData = createFormData(file, useDefault)
       const headers = createAuthHeaders(user)
-      
-      // Use the unauthenticated test endpoint for now
-      // TODO: Switch back to authenticated endpoint once WorkOS auth is properly implemented
       const url = getApiUrl(API_CONFIG.ENDPOINTS.PREDICT_TEST)
-      
-      // Make the API call with timeout for better error handling
+
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
-      
+      const timeoutId = setTimeout(() => controller.abort(), 30000)
+
       const response = await fetch(url, {
         method: 'POST',
         body: formData,
@@ -186,31 +262,54 @@ export function Dashboard() {
         headers,
         signal: controller.signal
       })
-      
+
       clearTimeout(timeoutId)
-      
-      // Clean up interval and set progress to complete
-      clearInterval(progressInterval)
-      setProgress(100)
-      
-      // Handle error responses
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: `Server error: ${response.status}` }))
-        throw new Error(errorData.detail || `Failed to analyze the data (Status: ${response.status})`)
+        throw new Error(`Error: ${response.status} ${response.statusText}`)
       }
-      
-      // Process successful response
+
       const result = await response.json()
       
-      // Transform data using pure function
+      // Extract predictions and metadata from response
+      const { predictions, metadata } = result
+      setMetadata(metadata || {})
+
+      // Format analysis result for display
       const formattedAnalysis = formatAnalysisResult(result)
       setAnalysis(formattedAnalysis)
+
+      // Parse CSV content and map predictions to data
+      if (csvContent) {
+        const parsedCsv = parseCSV(csvContent)
+        if (parsedCsv.length > 0) {
+          // Skip header row
+          const dataRows = parsedCsv.slice(1)
+          
+          // Extract prediction indices if available in metadata
+          const predictionIndices = metadata?.prediction_indices || []
+          
+          // Map predictions to CSV data with enhanced crop labels
+          const cropDataWithPredictions = mapPredictionsToData(
+            predictions, 
+            dataRows,
+            predictionIndices.length > 0 ? predictionIndices : undefined
+          )
+          setCropData(cropDataWithPredictions)
+        }
+      }
+
+      clearInterval(progressInterval)
+      setIsAnalyzing(false)
+      setProgress(100)
     } catch (err) {
-      console.error('Error analyzing data:', err)
+      console.error('Error during analysis:', err)
+      setAnalysis(null)
       setError(handleFetchError(err))
     } finally {
       clearInterval(progressInterval)
       setIsAnalyzing(false)
+      setProgress(isAnalyzing ? 0 : 100)
     }
   }
 
@@ -322,6 +421,34 @@ export function Dashboard() {
             <div className="prose max-w-none">
               <pre className="whitespace-pre-wrap text-sm bg-gray-50 p-4 rounded-lg">{analysis}</pre>
             </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      {cropData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Crop Recommendations</CardTitle>
+            <CardDescription>
+              Based on soil nutrients, climate conditions, and our AI model
+              {metadata && ` (${metadata.model_type})`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {getPaginatedData(cropData, currentPage, ITEMS_PER_PAGE).map((crop, index) => (
+                <CropRecommendationCard 
+                  key={`crop-${currentPage}-${index}`} 
+                  data={crop} 
+                />
+              ))}
+            </div>
+            
+            <CardPagination 
+              currentPage={currentPage}
+              totalPages={calculateTotalPages(cropData.length, ITEMS_PER_PAGE)}
+              onPageChange={setCurrentPage}
+            />
           </CardContent>
         </Card>
       )}
