@@ -118,19 +118,29 @@ async def callback(
         response = JSONResponse(
             content={"message": "Login successful"},
             headers={
-                "Access-Control-Allow-Credentials": "true",
-                "Access-Control-Allow-Origin": request.headers.get("origin", "http://localhost:3000")
+                "Access-Control-Allow-Credentials": "true" # Required for cookies with credentials
             }
         )
+        # Decode the access token to get its expiration time for the cookie
+        try:
+            token_claims = jwt.get_unverified_claims(access_token)
+            expires_at = token_claims.get("exp", datetime.utcnow().timestamp() + 900) # Default to 15 mins if no exp
+        except Exception:
+            expires_at = datetime.utcnow().timestamp() + 900 # Default to 15 mins on error
+
+        current_time = datetime.utcnow().timestamp()
+        max_age_seconds = int(expires_at - current_time)
+        if max_age_seconds <= 0:
+            max_age_seconds = 900 # Ensure positive max_age, default 15 mins if already expired or error
+
         response.set_cookie(
-            key="session_token",
-            value=access_token,
-            httponly=True,
-            secure=False,  # Set to True in production with HTTPS
+            key="workos_access_token", 
+            value=access_token, 
+            httponly=True, 
+            secure=settings.ENVIRONMENT == "production", # True in production
             samesite="lax",
-            max_age=30 * 60,  # 30 minutes
             path="/",
-            domain=None  # Let browser use the current domain
+            max_age=max_age_seconds
         )
         
         # Log activity
@@ -153,44 +163,41 @@ async def logout(request: Request, db: Session = Depends(get_db)):
     response_content = {"message": "Backend logout process initiated."}
     status_code = 200
 
-    session_token_from_cookie = request.cookies.get("session_token")
+    session_id_from_cookie = request.cookies.get("workos_access_token") 
+    user_id_for_logging = None # Initialize
+    status_code = 200 # Default to OK
 
-    if session_token_from_cookie:
-        user_id_for_logging = None
+    if session_id_from_cookie:
         try:
-            payload = validate_workos_token(session_token_from_cookie)
+            payload = validate_workos_token(session_id_from_cookie)
             workos_session_id = payload.get("sid")
             user_id_for_logging = payload.get("sub")
 
             if workos_session_id:
                 crud.invalidate_session(db, workos_session_id)
-                response_content = {"message": "Backend session invalidated locally."}
+            # Attempt to get WorkOS session ID from the token to invalidate WorkOS session via frontend
+            try:
+                # The session_id_from_cookie is the WorkOS access_token
+                unverified_payload = jwt.get_unverified_claims(session_id_from_cookie)
+                workos_sid = unverified_payload.get("sid")
+                workos_user_id_for_db_ops = unverified_payload.get("sub") # Get user ID for logging
 
-                # Also invalidate the WorkOS session remotely
-                try:
-                    workos_api_key = settings.WORKOS_API_KEY
-                    headers = {
-                        "Authorization": f"Bearer {workos_api_key}",
-                        "Content-Type": "application/json"
-                    }
-                    remote_logout_payload = {"session_id": workos_session_id}
-                    logout_response = requests.post(
-                        "https://api.workos.com/user_management/logout",
-                        headers=headers,
-                        json=remote_logout_payload,
-                        timeout=5  # seconds
-                    )
-                    logout_response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
-                    print(f"Successfully invalidated WorkOS session {workos_session_id} remotely.")
-                    response_content['message'] += " WorkOS session also invalidated remotely."
-                except requests.exceptions.RequestException as workos_logout_error:
-                    print(f"WorkOS remote logout failed for session {workos_session_id}: {workos_logout_error}")
-                    # Optionally, update response_content to indicate partial success if needed
-                    response_content['message'] += " Failed to invalidate WorkOS session remotely, but local session cleared."
-                    # Do not let this error stop the rest of the logout flow (e.g., cookie clearing)
-            else:
-                print("Logout: Valid token but no 'sid' found.")
-                response_content = {"message": "Backend logout: No session ID in token to invalidate."}
+                if workos_sid:
+                    response_content["workos_session_id_for_logout"] = workos_sid
+                
+                if workos_user_id_for_db_ops:
+                    db_user = crud.get_user_by_workos_id(db, workos_user_id_for_db_ops)
+                    if db_user:
+                        user_id_for_logging = db_user.id
+                        # If you have a specific local session to invalidate in DB tied to workos_sid or user_id:
+                        # crud.invalidate_app_session_by_workos_sid(db, workos_sid) # Example
+                        pass # Placeholder for specific DB session invalidation
+
+                response_content["message"] = "Backend logout: Cookie cleared."
+            except Exception as e:
+                print(f"Error during backend session invalidation: {e}")
+                response_content = {"message": f"Backend logout: Error invalidating session - {str(e)}"}
+                status_code = 500
 
         except HTTPException as http_exc:
             print(f"Logout: Token validation failed (likely expired or invalid): {http_exc.detail}. Proceeding to clear cookie.")
@@ -216,10 +223,10 @@ async def logout(request: Request, db: Session = Depends(get_db)):
 def _clear_session_cookie(response: Response) -> None:
     """Helper to clear the session cookie with proper attributes"""
     response.delete_cookie(
-        key="session_token",
+        key="workos_access_token",
         path="/",
         domain=None,  # Let browser use the current domain
-        secure=False,  # Set to True in production with HTTPS
+        secure=settings.ENVIRONMENT == "production", # True in production
         httponly=True,
         samesite="lax"
     )
@@ -230,7 +237,7 @@ async def get_me(request: Request, db: Session = Depends(get_db)):
     """
     Returns the current authenticated user's info if the WorkOS session is valid, else 401.
     """
-    access_token = request.cookies.get("session_token")
+    access_token = request.cookies.get("workos_access_token")
     if not access_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
         

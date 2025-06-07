@@ -1,5 +1,5 @@
 from typing import Dict, Any, Tuple
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 import models
 import crud
@@ -10,7 +10,6 @@ from jose import jwt
 import json
 from functools import lru_cache
 import workos
-from fastapi.responses import JSONResponse
 from datetime import timedelta, datetime
 
 settings = get_settings()
@@ -54,8 +53,7 @@ def validate_workos_token(token: str) -> Dict[str, Any]:
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid WorkOS token: {str(e)}")
 
-# NEW: Dependency to get the internal session ID from the cookie
-from fastapi import Response, Body
+# Dependency to get the internal session ID from the cookie
 
 def get_session_id_from_cookie(request: Request) -> str:
     session_id = request.cookies.get("session_token")  # Unified cookie name
@@ -103,8 +101,6 @@ async def refresh_token_if_needed(db: Session, session_id: str, payload: Dict[st
     except Exception:
         return None, None
 
-from datetime import timedelta, datetime
-
 # REPLACEMENT for get_current_user
 async def get_current_active_user(
     session_id: str = Depends(get_session_id_from_cookie),
@@ -144,8 +140,54 @@ async def refresh_workos_token(refresh_token: str) -> dict:
         raise HTTPException(status_code=401, detail=f"Token refresh failed: {str(e)}")
 
 # --- Backward compatibility export ---
-async def get_current_user(*args, **kwargs):
+async def get_current_user(request: Request, response: Response, db: Session = Depends(get_db)) -> models.User:
     """
-    Deprecated: Use get_current_active_user instead. This is a compatibility alias.
+    Dependency function to get the current user.
+    It validates the session token from the cookie against WorkOS.
     """
-    return await get_current_active_user(*args, **kwargs)
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    # 1. Get the access token from the cookie
+    token = request.cookies.get("workos_access_token")  # Use the name you set in your callback
+    if token is None:
+        raise credentials_exception
+
+    try:
+        # 2. Validate the token using WorkOS JWKS
+        payload = validate_workos_token(token)
+        
+        # Extract the WorkOS user ID from the token
+        workos_user_id = payload.get("sub")  # 'sub' claim holds the user ID
+        if workos_user_id is None:
+            raise credentials_exception
+        
+        # 3. Get user from your local database
+        user = crud.get_user_by_workos_id(db, workos_user_id=workos_user_id)
+        if user is None:
+            raise credentials_exception
+        
+        # 4. Check if token needs refresh
+        new_access_token, new_refresh_token = await refresh_token_if_needed(db, payload.get("sid"), payload)
+        
+        # Check if token needs refresh and set cookie if new token is obtained
+        new_access_token, _ = await refresh_token_if_needed(db, payload.get("sid"), payload)
+        
+        if new_access_token:
+            response.set_cookie(
+                key="workos_access_token",
+                value=new_access_token,
+                httponly=True,
+                secure=settings.ENVIRONMENT == "production",
+                samesite="lax",
+                path="/",
+                # Consider setting max_age based on the new token's actual expiry
+            )
+            
+        return user
+    except Exception as e:
+        # This would catch invalid tokens, signatures, expiry etc.
+        raise HTTPException(status_code=401, detail=f"Authentication error: {str(e)}")
