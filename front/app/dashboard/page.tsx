@@ -3,6 +3,9 @@
 
 import { useState } from "react";
 import { Navigation } from '@/components/navigation';
+import { Dashboard } from '@/components/dashboard';
+import { ProfilePage } from '@/components/profile-page';
+import AdminDashboard from '@/components/admin-dashboard';
 
 export default function DashboardPage() {
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'profile' | 'admin'>('dashboard');
@@ -11,26 +14,13 @@ export default function DashboardPage() {
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
-        return (
-          <div className="p-8">
-            <h2 className="text-2xl font-bold">Dashboard</h2>
-            <p>Welcome to the dashboard!</p>
-          </div>
-        );
+        return <Dashboard />;
       case 'profile':
         return (
-          <div className="p-8">
-            <h2 className="text-2xl font-bold">Profile</h2>
-            <p>This is your profile page.</p>
-          </div>
+          <ProfilePage user={null} onUpdateUser={() => {}} />
         );
       case 'admin':
-        return (
-          <div className="p-8">
-            <h2 className="text-2xl font-bold">Admin Dashboard</h2>
-            <p>Admin controls and data go here.</p>
-          </div>
-        );
+        return <AdminDashboard />;
       default:
         return null;
     }

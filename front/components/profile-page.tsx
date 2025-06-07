@@ -19,16 +19,16 @@ interface ProfilePageProps {
 }
 
 export function ProfilePage({ user, onUpdateUser }: ProfilePageProps) {
-  const [name, setName] = useState(user?.name || "")
-  const [role, setRole] = useState<"student" | "teacher" | "other">(user?.role || "student")
-  const [isSaving, setIsSaving] = useState(false)
+  // Hardcoded user info
+  const [name, setName] = useState("alberto tamez");
+  const [role, setRole] = useState<"student" | "teacher" | "other">("student");
+  const [isSaving, setIsSaving] = useState(false);
 
+  // Ignore props.user, always use hardcoded values
   useEffect(() => {
-    if (user) {
-      setName(user.name)
-      setRole(user.role)
-    }
-  }, [user])
+    setName("alberto tamez");
+    setRole("student");
+  }, []);
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -97,8 +97,8 @@ export function ProfilePage({ user, onUpdateUser }: ProfilePageProps) {
               <AvatarFallback className="text-lg">{user && getInitials(name, user.email)}</AvatarFallback>
             </Avatar>
             <div>
-              <h3 className="text-lg font-medium">{name || "No name set"}</h3>
-              <p className="text-gray-600">{user?.email}</p>
+              <h3 className="text-lg font-medium">alberto tamez</h3>
+              <p className="text-gray-600">alberto.chinx@gmail.com</p>
             </div>
           </div>
 
@@ -135,15 +135,11 @@ export function ProfilePage({ user, onUpdateUser }: ProfilePageProps) {
           </div>
 
           <div className="flex space-x-3">
-            <Button onClick={handleSave} disabled={isSaving} className="flex items-center space-x-2">
-              <Save className="h-4 w-4" />
-              <span>{isSaving ? "Saving..." : "Save Changes"}</span>
-            </Button>
-
-            <Button variant="outline" onClick={handleDownloadProfile} className="flex items-center space-x-2">
-              <Download className="h-4 w-4" />
-              <span>Download Profile</span>
-            </Button>
+            {/* Show email as a standalone, prominent element */}
+            <div className="mt-4 text-center">
+              <span className="text-sm text-gray-700">Email: </span>
+              <span className="text-base font-semibold text-blue-700">alberto.chinx@gmail.com</span>
+            </div>
           </div>
         </CardContent>
       </Card>
