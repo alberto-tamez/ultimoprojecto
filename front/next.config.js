@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // For Next.js 15.x to allow cross-origin requests for /_next/* resources during development
+  // when accessing the dev server via a different host (e.g., through Nginx proxy)
+  allowedDevOrigins: ['https://10.49.12.46:9943'],
+
   experimental: {
     serverActions: {
       // This attempts to tell Next.js to trust the X-Forwarded-Host header

@@ -1,5 +1,4 @@
 import { ReactNode } from 'react';
-import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components';
 import './globals.css';
 
 interface RootLayoutProps {
@@ -15,7 +14,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
-        <AuthKitProvider>{children}</AuthKitProvider>
+        {children}
       </body>
     </html>
   );

@@ -16,7 +16,11 @@ class ApiClient {
 
   constructor() {
     // Load from environment variables with fallback for development
-    this.baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    const envBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    if (!envBaseUrl) {
+      throw new Error('NEXT_PUBLIC_API_BASE_URL environment variable is not set');
+    }
+    this.baseUrl = envBaseUrl;
     
     this.defaultHeaders = {
       'Content-Type': 'application/json',
