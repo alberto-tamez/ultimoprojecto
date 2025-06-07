@@ -10,7 +10,6 @@ import { Label } from "./ui/label"
 import { Upload, FileText, Brain, Download, AlertCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { Progress } from "./ui/progress"
-import { useAuth } from "@workos-inc/authkit-nextjs/components"
 import { CropRecommendationCard, CropData } from "./CropRecommendationCard"
 import { getCropLabelFromIndex } from "../lib/crop-utils"
 import { CardPagination } from "./CardPagination"
@@ -127,7 +126,6 @@ const parseCSV = (csvContent: string): string[][] => {
 
 export function Dashboard() {
   // State management using React hooks
-  const { user } = useAuth()
   const [file, setFile] = useState<File | null>(null)
   const [useDefault, setUseDefault] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -302,7 +300,7 @@ export function Dashboard() {
     try {
       const formData = createFormData(file, useDefault)
       // Set isFormData to true when sending FormData
-      const headers = createAuthHeaders(user, true)
+      const headers = createAuthHeaders(null, true)
       const url = getApiUrl(API_CONFIG.ENDPOINTS.PREDICT_TEST)
 
       const controller = new AbortController()

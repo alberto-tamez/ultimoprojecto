@@ -2,7 +2,6 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { getSignInUrl } from '@workos-inc/authkit-nextjs';
 
 /**
  * Login page component that handles authentication with WorkOS
@@ -25,10 +24,11 @@ export default function LoginPage() {
       setIsLoading(true);
       setError(null);
       // Always use the correct callback URI registered in WorkOS dashboard
+      const clientId = process.env.NEXT_PUBLIC_WORKOS_CLIENT_ID;
       const redirectUri = process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI;
-      const signInUrl = await getSignInUrl({
-        redirectUri,
-      });
+      const provider = 'GoogleOAuth'; // Or let user select, or use your connection type
+      if (!clientId || !redirectUri) throw new Error('Missing WorkOS client ID or redirect URI');
+      const signInUrl = `https://api.workos.com/sso/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&provider=${encodeURIComponent(provider)}&response_type=code`;
       window.location.href = signInUrl;
     } catch (err) {
       console.error('Sign in error:', err);

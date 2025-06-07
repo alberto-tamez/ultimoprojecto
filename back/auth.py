@@ -11,8 +11,20 @@ import json
 from functools import lru_cache
 import workos
 from datetime import timedelta, datetime
+import os
 
 settings = get_settings()
+
+# DEBUG MODE: Set to True to completely bypass authentication
+# This can be controlled via environment variable
+DEBUG_BYPASS_AUTH = os.environ.get("DEBUG_BYPASS_AUTH", "true").lower() == "true"
+
+if DEBUG_BYPASS_AUTH:
+    print("🔓 DEBUG_BYPASS_AUTH is enabled in backend. All authentication checks are bypassed!")
+    print("🔓 A hardcoded admin user will be returned for all authenticated routes.")
+    
+# Hardcoded user for debug mode
+DEBUG_USER_ID = 1  # Adjust this to match an existing user ID in your database
 
 # WorkOS JWKS URL for token validation
 WORKOS_JWKS_URL = "https://api.workos.com/.well-known/jwks.json"
@@ -56,6 +68,11 @@ def validate_workos_token(token: str) -> Dict[str, Any]:
 # Dependency to get the internal session ID from the cookie
 
 def get_session_id_from_cookie(request: Request) -> str:
+    # If debug bypass is enabled, return a dummy session ID
+    if DEBUG_BYPASS_AUTH:
+        return "debug-session-id"
+        
+    # Normal flow - check for session cookie
     session_id = request.cookies.get("session_token")  # Unified cookie name
     if not session_id:
         raise HTTPException(status_code=401, detail="Not authenticated: No session cookie.")
@@ -106,6 +123,18 @@ async def get_current_active_user(
     session_id: str = Depends(get_session_id_from_cookie),
     db: Session = Depends(get_db)
 ) -> models.User:
+    # If debug bypass is enabled, return a hardcoded user without validation
+    if DEBUG_BYPASS_AUTH:
+        # Get the debug user from the database
+        debug_user = db.query(models.User).filter(models.User.id == DEBUG_USER_ID).first()
+        if debug_user:
+            return debug_user
+        else:
+            # If the debug user doesn't exist, log a warning but continue with normal auth
+            print(f"⚠️ WARNING: Debug user with ID {DEBUG_USER_ID} not found in database!")
+            print("⚠️ Falling back to normal authentication. Please check your DEBUG_USER_ID setting.")
+    
+    # Normal authentication flow
     session = crud.get_session_by_id(db, session_id)
     if not session or not session.is_active:
         raise HTTPException(status_code=401, detail="Invalid or inactive session.")
@@ -144,7 +173,21 @@ async def get_current_user(request: Request, response: Response, db: Session = D
     """
     Dependency function to get the current user.
     It validates the session token from the cookie against WorkOS.
+    When DEBUG_BYPASS_AUTH is enabled, returns a hardcoded user without validation.
     """
+    # If debug bypass is enabled, return a hardcoded user without validation
+    if DEBUG_BYPASS_AUTH:
+        # Get the debug user from the database
+        debug_user = db.query(models.User).filter(models.User.id == DEBUG_USER_ID).first()
+        if debug_user:
+            return debug_user
+        else:
+            # If the debug user doesn't exist, log a warning but continue with normal auth
+            # This allows the system to work even if the hardcoded user ID is invalid
+            print(f"⚠️ WARNING: Debug user with ID {DEBUG_USER_ID} not found in database!")
+            print("⚠️ Falling back to normal authentication. Please check your DEBUG_USER_ID setting.")
+    
+    # Normal authentication flow when debug is disabled or debug user not found
     credentials_exception = HTTPException(
         status_code=401,
         detail="Could not validate credentials",
