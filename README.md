@@ -11,7 +11,6 @@ Sigue estos pasos para levantar desde cero todos los componentes en tu máquina 
 - PostgreSQL 13+ (instalado y corriendo localmente)
 - NGINX (instalado localmente)
 - Herramientas de desarrollo para generar certificados SSL (ej. OpenSSL)
-- (Opcional para GPU) CUDA Toolkit y Drivers NVIDIA
 
 ### 1. Clonar el repositorio
 
@@ -93,8 +92,8 @@ alembic upgrade head
 # python -m database.init_db 
 
 # Iniciar el servidor de desarrollo del backend
-echo "Iniciando Backend API en http://localhost:8000"
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+echo "Iniciando Backend API en http://localhost:9000"
+uvicorn app.main:app --host 0.0.0.0 --port 9000 --reload
 ```
 
 ### 5. Configurar y construir el Frontend
@@ -262,8 +261,7 @@ Para un despliegue en producción, querrás que tus aplicaciones (Backend, Front
 ### 9. Configuración inicial
 
 1.  Accede al frontend (`https://localhost`) y regístrate.
-2.  El primer usuario registrado podría obtener automáticamente el rol de administrador (dependiendo de la lógica implementada en el backend).
-3.  Verifica si necesitas promover usuarios a administradores manualmente si la asignación automática no está configurada.
+2.  Verifica si necesitas promover usuarios a administradores manualmente.
 
 ### Solución de problemas
 
@@ -303,7 +301,8 @@ Para un despliegue en producción, querrás que tus aplicaciones (Backend, Front
     ```
 
 - **Problemas de redirección HTTPS:**
-  - Asegúrate de acceder a la aplicación usando `https://localhost`
+  - Asegúrate de acceder a la aplicación usando `https://localhost:443` (el puerto 443 es el predeterminado para HTTPS)
+  - Si usas un puerto personalizado, asegúrate de incluirlo (ej: `https://localhost:8443`)
   - Los navegadores pueden mostrar advertencias de certificado autofirmado
   - En Chrome/Edge, haz clic en "Avanzado" y luego en "Continuar"
   - En Firefox, haz clic en "Aceptar el riesgo y continuar"
