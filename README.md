@@ -99,23 +99,23 @@ uvicorn app.main:app --host 0.0.0.0 --port 9000 --reload
 ### 5. Configurar y construir el Frontend
 
 ```bash
-cd ../front # Regresar al directorio raíz y luego a 'front'
+ # Volver al directorio raíz y entrar en 'front'
+cd ../front
 
 # Instalar dependencias
 npm install
 
-# Para desarrollo local con NGINX, usualmente construirás los archivos estáticos
-# y NGINX los servirá, o NGINX actuará como proxy al servidor de desarrollo de Next.js.
-# La configuración de NGINX provista asume que Next.js corre en modo desarrollo (npm run dev).
+# Para desarrollo local con NGINX, generalmente se construyen los archivos estáticos que NGINX servirá, o se configura NGINX como proxy al servidor de desarrollo de Next.js.
+# La configuración de NGINX provista asume que Next.js se ejecuta en modo desarrollo (`npm run dev`).
 
-# Iniciar servidor de desarrollo del frontend (NGINX hará proxy a este)
+# Iniciar el servidor de desarrollo del Frontend (NGINX hará proxy a este)
 echo "Iniciando Frontend en http://localhost:3000 (instancia 1) y http://localhost:3001 (instancia 2)"
-# Para correr dos instancias, necesitarás modificar el puerto en una de ellas o correrlas en terminales separadas.
+# Para ejecutar dos instancias, necesitarás modificar el puerto en una de ellas o ejecutarlas en terminales separadas.
 # Ejemplo para la primera instancia:
-npm run dev # Por defecto en puerto 3000
+npm run dev # Por defecto usa el puerto 3000
 
-# En otra terminal, para la segunda instancia (si es necesario y configurado en NGINX):
-# NEXT_PORT=3001 npm run dev # O similar, dependiendo de tu setup de Next.js
+# En otra terminal, para la segunda instancia (si es necesario y si está configurado en NGINX):
+# NEXT_PORT=3001 npm run dev # O similar, según la configuración de Next.js
 ```
 **Nota:** La configuración de NGINX provista usa un `upstream` con dos instancias (`localhost:3000` y `localhost:3001`). Para desarrollo local, puedes simplificarlo a una sola instancia si lo prefieres, ajustando tanto el `npm run dev` como la configuración de NGINX.
 
